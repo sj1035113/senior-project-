@@ -1,0 +1,19 @@
+{
+  "camera_pose": {
+    "position": {
+      "x": 1.0,
+      "y": 2.0,
+      "z": 3.0
+    },
+    "orientation": {
+      "roll": 0.1,
+      "pitch": 0.2,
+      "yaw": 0.3
+    }
+  },
+  "coordinates": {
+    "latitude": null,
+    "longitude": null 
+  },
+  "photo": "D:\\vscode\\D-project\\formal\\data_base\\test\\test_base64.txt"
+}
