@@ -57,4 +57,4 @@ const checkPythonConnection = setInterval(() => {
     }
   }
 }, 1000);
-
+// 先確認python有連結上在決定做這一個動作，在新增一個else條件。如果沒有python clint會報錯

@@ -56,7 +56,7 @@ async function processJsonFile(jsonFilePath, ws) {
         command: 'has_coordinate'
       });
       return 'Normal';
-    } else if(data.coordinates.latitude === null && data.coordinates.longitude === null) {
+    } else if(data.coordinates.latitude === null || data.coordinates.longitude === null) {
       console.log('JSON 中未包含座標，傳送代碼給 Python 處理。');
       await pythonConnector.sendMessage(ws, {
         type: 'notification',

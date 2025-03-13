@@ -3,8 +3,6 @@ const path = require('path');
 const http = require('http');
 const WebSocket = require('ws');  // 使用 ws 模組
 
-
-
 // 建立 HTTP 伺服器
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -13,48 +11,88 @@ const server = http.createServer((req, res) => {
 
 const PORT = 8080;
 server.listen(PORT, () => {
-  console.log(`Server is listening on port ${PORT}`);
+  console.log(`🚀 Server is listening on port ${PORT}`);
 });
 
 // 在同一個 HTTP 伺服器上建立 WebSocket 伺服器
 const wss = new WebSocket.Server({ server });
 
-// 當有新的 WebSocket 連線時
+/**
+ * 🟢 監聽新的 WebSocket 連線
+ */
 wss.on('connection', (ws, req) => {
-  console.log('New client connected');
+  console.log('✅ New client connected');
 
-  // 接收訊息
+  // 發送歡迎訊息
+  ws.send(JSON.stringify({ message: 'Welcome to the WebSocket server!' }));
+
+  // 監聽客戶端傳來的訊息
   ws.on('message', (message) => {
-    console.log('Received message:', message);
+    const messageStr = message.toString();
+    console.log('Received message:', messageStr);
+    
     try {
-      // 嘗試解析傳來的 JSON 字串
-      const data = JSON.parse(message);
-      if (data.identify && data.identify.toLowerCase() === 'python') {
-        // 如果 identify 為 python，則建立一個專門處理 python 相關的 websocket 連線
-        ws.pythonws = true;  // 標記此連線為 python 客戶端
-        console.log('Python client connected, establishing pythonws...');
-        // 在這裡你可以進一步設計專屬於 python 客戶端的邏輯或路由
+      const data = JSON.parse(message); // 解析 JSON 訊息
+
+      // Modified: 如果有 identify 屬性則進行後續處理
+      if (data.identify) {
+        if (data.identify.toLowerCase() === 'python') {
+          ws.pythonws = true;  // 標記此連線為 Python 客戶端
+          console.log('🐍 Python client connected, establishing pythonws...');
+          handlePythonClient(ws);  // 設定 Python 客戶端的專屬監聽器
+        } else {
+          console.log('Non-python client connected with identify:', data.identify);
+          handleDefaultClient(ws); // 設定一般客戶端的監聽器
+        }
       } else {
-        console.log('Non-python client connected');
+        // Modified: 如果沒有 identify 屬性且該客戶端未被註冊，則輸出提示訊息
+        if (!ws.pythonws) {
+          console.log("有來亂的");
+        }
       }
     } catch (error) {
-      console.error('Error parsing JSON message:', error);
+      console.error('❌ Error parsing JSON message:', error);
     }
   });
 
-  // 可選：發送初始歡迎訊息
-  ws.send(JSON.stringify({ message: 'Welcome to the WebSocket server!' }));
+  // 監聽客戶端斷線
+  ws.on('close', () => {
+    //console.log("❌ Client disconnected");
+  });
 });
 
-
-const checkPythonConnection = setInterval(() => {
-  for (let client of wss.clients) {
-    if (client.pythonws) {
-      console.log('檢查到至少一個連線具備 pythonws 屬性！');
-      jsonHandler.processJsonFile("D:\\vscode\\D-project\\formal\\data_base\\test\\test.json", client);
-      clearInterval(checkPythonConnection);
-      break;
+/**
+ * 🔹 處理 Python 客戶端的 WebSocket 連線
+ */
+function handlePythonClient(ws) {
+  ws.on('message', (message) => {
+    const messageStr = message.toString();
+    console.log("🐍 Python client message:", messageStr);
+    try {
+      const data = JSON.parse(message);
+      if (data.action === "request_json") {
+        // 立即處理 JSON 檔案並回應
+        jsonHandler.processJsonFile("D:\\vscode\\D-project\\formal\\data_base\\test\\test.json", ws);
+      }
+      else if (data.action === "get_cesium_picture"){
+        console.log("finish")
+      }
+      else {
+        ws.send(JSON.stringify({ event: "error", message: "未知的指令" }));
+      }
+    } catch (error) {
+      console.error("❌ Python 客戶端 JSON 解析錯誤:", error);
     }
-  }
-}, 1000);
+  });
+}
 
+/**
+ * 🔹 處理一般客戶端的 WebSocket 連線
+ */
+function handleDefaultClient(ws) {
+  ws.on('message', (message) => {
+    const messageStr = message.toString();
+    console.log("💻 Default client message:", messageStr);
+    ws.send(JSON.stringify({ event: "response", message: "這是一般 WebSocket 客戶端的回應。" }));
+  });
+}

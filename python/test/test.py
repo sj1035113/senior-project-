@@ -27,6 +27,5 @@ async def communicate():
 
         response = await websocket.recv()
         print(f"收到伺服器回應: {response}")
-        print("hello world")
 
 asyncio.run(communicate())
