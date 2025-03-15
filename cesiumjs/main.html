@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>WebSocket 與 Google Earth 3D Tiles</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- 載入 CesiumJS -->
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.127/Build/Cesium/Cesium.js"></script>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.127/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <style>
+    html, body, #cesiumContainer {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+    /* infoBox 用來顯示連線狀態與座標資訊 */
+    #infoBox {
+      padding: 10px;
+      background: rgb(255, 255, 255 , 0.1);
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 1000;
+      border: 1px solid (255, 255, 255 , 0);
+      font-family: Arial, sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+  <div id="infoBox">等待連線...</div>
+  <script>
+    // 設定 Cesium Ion token（請將 YOUR_TOKEN_HERE 替換成你的 token）
+    Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIyOGRlNTU0ZC04ZjI3LTQzZTQtYjkzOC0zZDM2Mjg1M2NhMzUiLCJpZCI6MjY5MTM4LCJpYXQiOjE3NDEyNzUwNjV9.4CesGc_KCiQ7CI0-gIIQZv_5a8ilf6yukgoRkXzo2Ag';
+
+    // 初始化 Cesium Viewer，並關閉部分 UI 元件
+    const viewer = new Cesium.Viewer("cesiumContainer", {
+      timeline: false,
+      animation: false,
+      sceneModePicker: false,
+      baseLayerPicker: false,
+      geocoder: Cesium.IonGeocodeProviderType.GOOGLE,
+      globe: false  // 關閉預設球體
+    });
+
+    // 啟用大氣效果
+    viewer.scene.skyAtmosphere.show = true;
+
+    // 載入 Google Earth 的 Photorealistic 3D Tiles
+    (async () => {
+      try {
+        const tileset = await Cesium.createGooglePhotorealistic3DTileset({
+          onlyUsingWithGoogleGeocoder: true,
+        });
+        viewer.scene.primitives.add(tileset);
+      } catch (error) {
+        console.log(`Error loading Photorealistic 3D Tiles tileset. ${error}`);
+      }
+    })();
+
+    const infoBox = document.getElementById('infoBox');
+
+    // 建立 WebSocket 連線 (請根據需求修改 URL)
+    const ws = new WebSocket('ws://localhost:8080');
+
+    ws.onopen = () => {
+      console.log("✅ WebSocket 連線成功");
+      // 傳送 JSON 格式的識別訊息
+      ws.send(JSON.stringify({ identify: "cesium" }));
+    };
+
+    ws.onmessage = event => {
+      try {
+        const data = JSON.parse(event.data);
+
+        // 若收到伺服器確認識別的訊息
+        if (data.status === "connected") {
+          console.log("伺服器確認識別:", data.message);
+          infoBox.innerHTML = `伺服器確認: ${data.message}`;
+          return;
+        }
+
+        // 假設收到的是座標更新的資料
+        console.log("收到視角數據:", data);
+        infoBox.innerHTML = `
+          座標更新:<br>
+          經度: ${data.longitude.toFixed(5)}<br>
+          緯度: ${data.latitude.toFixed(5)}<br>
+          高度: ${data.height}
+        `;
+
+        // 更新 Cesium 相機視角到伺服器提供的座標
+        viewer.camera.setView({
+          destination: Cesium.Cartesian3.fromDegrees(
+            data.longitude,
+            data.latitude,
+            data.height
+          ),
+          orientation: {
+            heading: Cesium.Math.toRadians(data.heading || 0),
+            pitch: Cesium.Math.toRadians(data.pitch || -90),
+            roll: Cesium.Math.toRadians(data.roll || 0)
+          }
+        });
+      } catch (error) {
+        console.error("資料解析錯誤:", error, event.data);
+      }
+    };
+
+    ws.onerror = error => {
+      console.error("WebSocket 錯誤:", error);
+      infoBox.innerHTML = "WebSocket 連線發生錯誤";
+    };
+
+    ws.onclose = () => {
+      console.log("WebSocket 連線已關閉");
+      infoBox.innerHTML = "WebSocket 連線已關閉";
+    };
+  </script>
+</body>
+</html>
