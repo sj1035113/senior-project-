@@ -1,1 +1,6 @@
-{}
+{
+  "dependencies": {
+    "express": "^4.21.2",
+    "object-assign": "^4.1.1"
+  }
+}
