@@ -18,7 +18,7 @@ app.get('/', (req, res) => {
   res.send('HTTP Server is running');
 });
 
-// Modified: 新增圖片上傳路由
+// Modified: 新增圖片上傳路由(需加入)
 app.post('/upload', (req, res) => {
   const { image } = req.body;
   if (!image) {
@@ -46,13 +46,13 @@ app.post('/upload', (req, res) => {
   });
 });
 
-// 建立 HTTP 伺服器供 API 使用
+// 建立 HTTP 伺服器供 API 使用(需加入)
 const httpServer = http.createServer(app);
 httpServer.listen(HTTP_PORT, () => {
   console.log(`HTTP Server running on http://localhost:${HTTP_PORT}`);
 });
 
-// 建立另一個 HTTP 伺服器專門處理圖片上傳
+// 建立另一個 HTTP 伺服器專門處理圖片上傳(需加入)
 const uploadServer = http.createServer(app);
 uploadServer.listen(UPLOAD_PORT, () => {
   console.log(`Upload Server running on http://localhost:${UPLOAD_PORT}`);
@@ -62,7 +62,7 @@ uploadServer.listen(UPLOAD_PORT, () => {
 const wss = new WebSocketServer({ port: WS_PORT });
 console.log(`WebSocket Server running on ws://localhost:${WS_PORT}`);
 
-// 監聽新的 WebSocket 連線
+// 監聽新的 WebSocket 連線(需加入)
 wss.on('connection', (ws, req) => {
   console.log('✅ New client connected');
 

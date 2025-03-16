@@ -2,7 +2,6 @@ import asyncio
 import websockets
 import asyncio
 import json
-import websockets
 
 async def communicate():
     uri = "ws://localhost:8080"

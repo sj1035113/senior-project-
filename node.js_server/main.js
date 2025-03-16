@@ -1,7 +1,14 @@
-const jsonHandler = require('D:\\vscode\\D-project\\formal\\node.js_server\\modules\\jsonhandler.js');
 const path = require('path');
 const http = require('http');
 const WebSocket = require('ws');  // 使用 ws 模組
+const express = require('express');
+const cors = require('cors');
+const fs = require('fs');
+const sendCoordinates  = require(path.join(__dirname, "modules", "coordinateSender.js")); // 引用模組
+const jsonHandler = require(path.join(__dirname, "modules", "jsonhandler.js"));
+const HTTP_PORT = 3000;      // HTTP 伺服器的埠號（可供其他 API 使用）
+const WS_PORT = 8080;        // WebSocket 伺服器的埠號
+const UPLOAD_PORT = 8081;    // 圖片上傳用的 HTTP 伺服器埠號（與 WebSocket 分開）
 
 // 建立 HTTP 伺服器
 const server = http.createServer((req, res) => {
@@ -16,6 +23,9 @@ server.listen(PORT, () => {
 
 // 在同一個 HTTP 伺服器上建立 WebSocket 伺服器
 const wss = new WebSocket.Server({ server });
+const app = express();
+app.use(cors());
+app.use(express.json({ limit: '50mb' }));
 
 /**
  * 🟢 監聽新的 WebSocket 連線
@@ -61,6 +71,51 @@ wss.on('connection', (ws, req) => {
   });
 });
 
+
+app.get('/', (req, res) => {
+  res.send('HTTP Server is running');
+});
+
+// 圖片上傳路由
+app.post('/upload', (req, res) => {
+  const { image } = req.body;
+  if (!image) {
+    return res.status(400).send("No image provided");
+  }
+  
+  // 移除 data URL 前綴
+  const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
+  const filename = 'screenshot_${Date.now()}.png';
+  const uploadDir = path.join(__dirname, "uploads");
+  
+  // 確保上傳目錄存在
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+  
+  const filePath = path.join(uploadDir, filename);
+  
+  fs.writeFile(filePath, base64Data, 'base64', (err) => {
+    if (err) {
+      console.error("Error saving image:", err);
+      return res.status(500).send("Error saving image");
+    }
+    res.json({ message: "Image saved", filename });
+  });
+});
+
+// 建立 HTTP 伺服器供 API 使用 (API 埠：HTTP_PORT)
+const httpServer = http.createServer(app);
+httpServer.listen(HTTP_PORT, () => {
+  console.log(`HTTP Server running on http://localhost:${HTTP_PORT}`);
+});
+
+// 建立另一個 HTTP 伺服器專門處理圖片上傳 (上傳埠：UPLOAD_PORT)
+const uploadServer = http.createServer(app);
+uploadServer.listen(UPLOAD_PORT, () => {
+  console.log(`Upload Server running on http://localhost:${UPLOAD_PORT}`);
+});
+
 /**
  * 🔹 處理 Python 客戶端的 WebSocket 連線
  */
@@ -75,8 +130,6 @@ function handlePythonClient(ws) {
         jsonHandler.processJsonFile("D:\\vscode\\D-project\\formal\\data_base\\test\\test.json", ws);
       }
       else if (data.action === "get_cesium_picture"){
-
-        
         console.log("finish")
       }
       else {
@@ -98,3 +151,5 @@ function handleDefaultClient(ws) {
     ws.send(JSON.stringify({ event: "response", message: "這是一般 WebSocket 客戶端的回應。" }));
   });
 }
+
+

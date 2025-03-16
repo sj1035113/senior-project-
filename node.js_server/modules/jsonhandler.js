@@ -1,8 +1,8 @@
 const fs = require('fs').promises;
 const path = require('path');
-const pythonConnector = require('D:\\vscode\\D-project\\formal\\node.js_server\\modules\\websocketHandler.js');
-const folderManager = require('D:\\vscode\\D-project\\formal\\node.js_server\\modules\\folderManager.js');
-const execution = require('D:\\vscode\\D-project\\formal\\node.js_server\\modules\\executionManager.js');
+const pythonConnector = require("./websocketHandler.js");
+const folderManager = require("./folderManager.js");
+const execution = require("./executionManager.js");
 /**
  * 處理 JSON 檔案，並根據是否包含座標資料回傳狀態碼
  * @param {string} jsonFilePath JSON 檔案路徑
