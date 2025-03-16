@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>截圖範例 - 透過 html2canvas</title>
+  <!-- 載入 html2canvas (使用 CDN) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    #targetFrame {
+      border: 1px solid #ccc;
+      width: 800px;
+      height: 600px;
+    }
+    #resultImg {
+      border: 1px solid #333;
+      margin-top: 20px;
+      max-width: 800px;
+    }
+  </style>
+</head>
+<body>
+  <h1>截圖範例</h1>
+  <p>下方 iframe 會載入一個網站（https://example.com）。點選「截圖」按鈕後，會嘗試截取該 iframe 的畫面，並在下方顯示截圖結果。</p>
+  
+  <!-- 載入目標網站的 iframe -->
+  <iframe id="targetFrame" src="https://example.com"></iframe>
+  
+  <br>
+  <button id="captureBtn">截圖</button>
+  
+  <h2>截圖結果：</h2>
+  <img id="resultImg" alt="截圖結果將顯示於此" />
+
+  <script>
+    document.getElementById("captureBtn").addEventListener("click", function() {
+      const iframe = document.getElementById("targetFrame");
+      // 使用 html2canvas 截取 iframe 元素
+      html2canvas(iframe, {
+        allowTaint: true,
+        useCORS: true
+      }).then(canvas => {
+        const dataURL = canvas.toDataURL("image/png");
+        document.getElementById("resultImg").src = dataURL;
+        console.log("截圖完成");
+      }).catch(error => {
+        console.error("截圖失敗:", error);
+      });
+    });
+  </script>
+</body>
+</html>

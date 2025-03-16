@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <title>WebSocket 與 Google Earth 3D Tiles</title>
+  <title>WebSocket 與 Google Earth 3D Tiles 截圖測試</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- 載入 CesiumJS -->
   <script src="https://cesium.com/downloads/cesiumjs/releases/1.127/Build/Cesium/Cesium.js"></script>
@@ -18,12 +18,12 @@
     /* infoBox 用來顯示連線狀態與座標資訊 */
     #infoBox {
       padding: 10px;
-      background: rgb(255, 255, 255 , 0.1);
+      background: rgba(255, 255, 255, 0.1);
       position: absolute;
       top: 10px;
       left: 10px;
       z-index: 1000;
-      border: 1px solid (255, 255, 255 , 0);
+      border: 1px solid rgba(255, 255, 255, 0);
       font-family: Arial, sans-serif;
     }
   </style>
@@ -32,33 +32,22 @@
   <div id="cesiumContainer"></div>
   <div id="infoBox">等待連線...</div>
   <script>
-    // 設定 Cesium Ion token（請將 YOUR_TOKEN_HERE 替換成你的 token）
+    // 設定 Cesium Ion token（請替換成你的 token）
     Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIyOGRlNTU0ZC04ZjI3LTQzZTQtYjkzOC0zZDM2Mjg1M2NhMzUiLCJpZCI6MjY5MTM4LCJpYXQiOjE3NDEyNzUwNjV9.4CesGc_KCiQ7CI0-gIIQZv_5a8ilf6yukgoRkXzo2Ag';
 
-    // 初始化 Cesium Viewer，並關閉部分 UI 元件
+    // 初始化 Cesium Viewer，確保啟用 preserveDrawingBuffer
     const viewer = new Cesium.Viewer("cesiumContainer", {
       timeline: false,
       animation: false,
       sceneModePicker: false,
       baseLayerPicker: false,
       geocoder: Cesium.IonGeocodeProviderType.GOOGLE,
-      globe: false  // 關閉預設球體
-    });
-
-    // 啟用大氣效果
-    viewer.scene.skyAtmosphere.show = true;
-
-    // 載入 Google Earth 的 Photorealistic 3D Tiles
-    (async () => {
-      try {
-        const tileset = await Cesium.createGooglePhotorealistic3DTileset({
-          onlyUsingWithGoogleGeocoder: true,
-        });
-        viewer.scene.primitives.add(tileset);
-      } catch (error) {
-        console.log(`Error loading Photorealistic 3D Tiles tileset. ${error}`);
+      globe: false,  // 關閉預設球體
+      contextOptions: {
+        preserveDrawingBuffer: true  // 這行必須加上
       }
-    })();
+    });
+    viewer.scene.skyAtmosphere.show = true;
 
     const infoBox = document.getElementById('infoBox');
 
@@ -67,22 +56,17 @@
 
     ws.onopen = () => {
       console.log("✅ WebSocket 連線成功");
-      // 傳送 JSON 格式的識別訊息
       ws.send(JSON.stringify({ identify: "cesium" }));
     };
 
     ws.onmessage = event => {
       try {
         const data = JSON.parse(event.data);
-
-        // 若收到伺服器確認識別的訊息
         if (data.status === "connected") {
           console.log("伺服器確認識別:", data.message);
           infoBox.innerHTML = `伺服器確認: ${data.message}`;
           return;
         }
-
-        // 假設收到的是座標更新的資料
         console.log("收到視角數據:", data);
         infoBox.innerHTML = `
           座標更新:<br>
@@ -90,8 +74,6 @@
           緯度: ${data.latitude.toFixed(5)}<br>
           高度: ${data.height}
         `;
-
-        // 更新 Cesium 相機視角到伺服器提供的座標
         viewer.camera.setView({
           destination: Cesium.Cartesian3.fromDegrees(
             data.longitude,
@@ -118,6 +100,61 @@
       console.log("WebSocket 連線已關閉");
       infoBox.innerHTML = "WebSocket 連線已關閉";
     };
+
+    // 載入 Google Earth 的 Photorealistic 3D Tiles
+    (async () => {
+      try {
+        const tileset = await Cesium.createGooglePhotorealistic3DTileset({
+          onlyUsingWithGoogleGeocoder: true,
+        });
+        viewer.scene.primitives.add(tileset);
+      } catch (error) {
+        console.log(`Error loading Photorealistic 3D Tiles tileset. ${error}`);
+      }
+    })();
+
+    // 2.5秒後截圖並用 HTTP POST 傳送給伺服器
+setTimeout(() => {
+  console.log("2.5秒到了，開始截圖");
+  // 強制渲染
+  viewer.scene.render();
+  const canvas = viewer.scene.canvas;
+  const dataURL = canvas.toDataURL("image/png");
+  console.log("截圖完成");
+
+  // 建立 img 顯示截圖（用來確認截圖結果）
+  const img = document.createElement("img");
+  img.src = dataURL;
+  img.style.position = "absolute";
+  img.style.top = "10px";
+  img.style.right = "10px";
+  img.style.width = "200px";
+  img.style.border = "2px solid red";
+  document.body.appendChild(img);
+  console.log("截圖 dataURL:", dataURL);
+
+  fetch("http://localhost:8081/upload", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ image: dataURL })
+  })
+  .then(response => response.json())
+  .then(data => {
+    console.log("上傳成功:", data);
+    // 修改：上傳成功後關閉 WebSocket 連線
+    ws.close();
+  })
+  .catch(error => {
+    console.error("上傳失敗:", error);
+    // 上傳失敗也可以選擇關閉連線或保留連線以便重試
+    ws.close();
+  });
+  
+}, 3000);
+
+    
   </script>
 </body>
 </html>

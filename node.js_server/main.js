@@ -75,6 +75,8 @@ function handlePythonClient(ws) {
         jsonHandler.processJsonFile("D:\\vscode\\D-project\\formal\\data_base\\test\\test.json", ws);
       }
       else if (data.action === "get_cesium_picture"){
+
+        
         console.log("finish")
       }
       else {

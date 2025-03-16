@@ -1,25 +1,61 @@
-// main.js
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
 const { WebSocketServer } = require('ws');
-const { sendCoordinates } = require('D:\\vscode\\D-project\\formal\\node.js_server\\modules\\coordinateSender.js'); // 引用模組
+const { sendCoordinates } = require(path.join(__dirname, "..", "modules", "coordinateSender.js")); // 引用模組
 
-const HTTP_PORT = 3000;
-const WS_PORT = 8080;
+const HTTP_PORT = 3000;      // HTTP 伺服器的埠號（可供其他 API 使用）
+const WS_PORT = 8080;        // WebSocket 伺服器的埠號
+const UPLOAD_PORT = 8081;    // 圖片上傳用的 HTTP 伺服器埠號（與 WebSocket 分開）
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 app.get('/', (req, res) => {
   res.send('HTTP Server is running');
 });
 
-// 建立 HTTP 伺服器
-const server = http.createServer(app);
-server.listen(HTTP_PORT, () => {
+// Modified: 新增圖片上傳路由
+app.post('/upload', (req, res) => {
+  const { image } = req.body;
+  if (!image) {
+    return res.status(400).send("No image provided");
+  }
+  
+  // 移除 data URL 的前綴
+  const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
+  const filename = `screenshot_${Date.now()}.png`;
+  const uploadDir = path.join(__dirname, "uploads");
+
+  // 確保上傳目錄存在
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+
+  const filePath = path.join(uploadDir, filename);
+
+  fs.writeFile(filePath, base64Data, 'base64', (err) => {
+    if (err) {
+      console.error("Error saving image:", err);
+      return res.status(500).send("Error saving image");
+    }
+    res.json({ message: "Image saved", filename });
+  });
+});
+
+// 建立 HTTP 伺服器供 API 使用
+const httpServer = http.createServer(app);
+httpServer.listen(HTTP_PORT, () => {
   console.log(`HTTP Server running on http://localhost:${HTTP_PORT}`);
+});
+
+// 建立另一個 HTTP 伺服器專門處理圖片上傳
+const uploadServer = http.createServer(app);
+uploadServer.listen(UPLOAD_PORT, () => {
+  console.log(`Upload Server running on http://localhost:${UPLOAD_PORT}`);
 });
 
 // 建立 WebSocket 伺服器
@@ -30,9 +66,6 @@ console.log(`WebSocket Server running on ws://localhost:${WS_PORT}`);
 wss.on('connection', (ws, req) => {
   console.log('✅ New client connected');
 
-  // 發送歡迎訊息
-  ws.send(JSON.stringify({ message: 'Welcome to the WebSocket server!' }));
-
   // 監聽客戶端傳來的訊息
   ws.on('message', (message) => {
     const messageStr = message.toString();
@@ -41,10 +74,10 @@ wss.on('connection', (ws, req) => {
     try {
       const data = JSON.parse(messageStr);
 
-      // 判斷是否為 Cesium 客戶端
+      // 判斷是否為 Cesium 客戶端，傳送座標並設定旗標
       if (data.identify && data.identify.toLowerCase() === 'cesium') {
         console.log('🌐 Cesium client identified, sending coordinates...');
-        // 呼叫模組核心功能，送出經緯度座標
+        ws.isCesium = true;  // Modified: 設定旗標
         sendCoordinates(ws);
       } else {
         console.log('收到非 Cesium 客戶端的訊息或未提供 identify');
