@@ -156,33 +156,11 @@ function captureAndUpload() {
       },
       body: JSON.stringify({ image: dataURL })
     })
-    .then(response => response.json())
-    .then(data => {
-      console.log("上傳成功", data);
-    })
-    .catch(error => {
-      console.error("上傳失敗", error);
-    });
   }, 3000);
   console.log("test")
 }
 
 //顯示截圖
-function displayCapturedImage(dataURL) {
-  const img = document.getElementById("screenshotPreview") || document.createElement("img");
-  img.id = "screenshotPreview";
-  img.src = dataURL;
-  img.style.position = "absolute";
-  img.style.top = "10px";
-  img.style.right = "10px";
-  img.style.width = "200px";
-  img.style.border = "2px solid red";
-  img.style.background = "#fff";
-  
-  if (!document.getElementById("screenshotPreview")) {
-    document.body.appendChild(img);
-  }
-}
 // 移除自動啟動截圖的定時呼叫
 // setTimeout(captureAndUpload, 3000);
 

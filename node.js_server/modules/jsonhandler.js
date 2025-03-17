@@ -23,7 +23,8 @@ async function processJsonFile(jsonFilePath, ws) {
       const folderNumber = execution.getSerialNumbers();
       console.log('取得的資料夾編號:', folderNumber);
       // 3. 設定父資料夾與子資料夾路徑
-      const parentFolder = path.join("D:\\vscode\\D-project\\formal\\data_base", folderNumber.toString());
+      const parentFolder = path.join(__dirname, "..", "..", "data_base", folderNumber.toString());
+
       const folderA = path.join(parentFolder, 'a');
       const folderB = path.join(parentFolder, 'b');
 
