@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fetch 測試</title>
+</head>
+<body>
+    <h1>Fetch 測試</h1>
+    <button onclick="sendRequest()">發送請求</button>
+    <p id="result">狀態：尚未請求</p>
+
+    <script>
+        function sendRequest() {
+            document.getElementById("result").innerText = "狀態：發送請求中...";
+            
+            fetch("http://localhost:3000/fetch-test")
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById("result").innerText = "伺服器回應：" + data.message;
+                    console.log("伺服器回應：", data);
+                })
+                .catch(error => {
+                    document.getElementById("result").innerText = "發生錯誤：" + error;
+                    console.error("請求錯誤：", error);
+                });
+        }
+    </script>
+</body>
+</html>

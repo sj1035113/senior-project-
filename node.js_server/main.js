@@ -41,15 +41,15 @@ uploadApp.post('/upload', (req, res) => {
   // 移除 data URL 前綴
   const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
   const filename = `screenshot_${Date.now()}.png`;
-  const uploadDir = path.join(__dirname, "uploads");
+  const uploadDir = path.join("C:\\senior_project_picture", "data_base", "1", "b");
+  //console.log('hello world'); // 取得 base64 長度
   
-  // 確保上傳目錄存在
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
   }
   
   const filePath = path.join(uploadDir, filename);
-  
+  //以下
   fs.writeFile(filePath, base64Data, 'base64', (err) => {
     if (err) {
       console.error("Error saving image:", err);
@@ -57,6 +57,8 @@ uploadApp.post('/upload', (req, res) => {
     }
     res.json({ message: "Image saved", filename });
   });
+  console.log(`Image uploaded and saved as ${filePath}`);
+  // 以上
 });
 
 const uploadServer = http.createServer(uploadApp);
