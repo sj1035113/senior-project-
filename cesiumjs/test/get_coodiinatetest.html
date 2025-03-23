@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <title>Cesium 點擊取得座標（修正解析度偏移）</title>
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.127/Build/Cesium/Cesium.js"></script>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.127/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: black;
+    }
+
+    #cesiumContainer {
+      width: 1920px;
+      height: 1080px;
+      margin: 0 auto;
+      display: block;
+      position: relative;
+      background-color: black;
+    }
+
+    #infoBox {
+      padding: 10px;
+      background: rgba(0, 0, 0, 0.6);
+      color: white;
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-family: Arial, sans-serif;
+      z-index: 999;
+      white-space: pre-line;
+    }
+  </style>
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+  <div id="infoBox">請點擊地圖取得座標</div>
+
+  <script>
+    // ✅ 請填入你的 Cesium Ion token
+    Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIyOGRlNTU0ZC04ZjI3LTQzZTQtYjkzOC0zZDM2Mjg1M2NhMzUiLCJpZCI6MjY5MTM4LCJpYXQiOjE3NDEyNzUwNjV9.4CesGc_KCiQ7CI0-gIIQZv_5a8ilf6yukgoRkXzo2Ag';
+
+    const viewer = new Cesium.Viewer("cesiumContainer", {
+      timeline: false,
+      animation: false,
+      sceneModePicker: false,
+      baseLayerPicker: false,
+      geocoder: false,
+      globe: false,
+      contextOptions: {
+        preserveDrawingBuffer: true
+      }
+    });
+
+    const infoBox = document.getElementById("infoBox");
+
+    // ✅ 修正點擊座標偏移：強制設定 canvas 尺寸與解析度
+    const fixedWidth = 1920;
+    const fixedHeight = 1080;
+    const canvas = viewer.scene.canvas;
+    canvas.style.width = fixedWidth + "px";
+    canvas.style.height = fixedHeight + "px";
+    canvas.width = fixedWidth;
+    canvas.height = fixedHeight;
+    viewer.resolutionScale = 1.0;
+    viewer.scene.requestRender();
+
+    viewer.scene.skyAtmosphere.show = true;
+
+    // ✅ 載入 Google Earth 3D Tiles 並設定初始視角
+    (async () => {
+      try {
+        const tileset = await Cesium.createGooglePhotorealistic3DTileset();
+        viewer.scene.primitives.add(tileset);
+
+        viewer.scene.camera.setView({
+          destination: Cesium.Cartesian3.fromDegrees(120.648803, 24.177211, 140.3697528082066),
+          orientation: {
+            heading: Cesium.Math.toRadians(330),
+            pitch: Cesium.Math.toRadians(-1.7),
+            roll: 0.0,
+          }
+        });
+      } catch (error) {
+        console.error(`❌ 載入 Google 3D Tiles 發生錯誤:`, error);
+        infoBox.innerText = "載入 3D Tiles 發生錯誤";
+      }
+    })();
+
+    // ✅ 點擊取得螢幕像素與地理座標
+    viewer.scene.canvas.addEventListener("click", function (event) {
+      const screenPosition = new Cesium.Cartesian2(event.clientX, event.clientY);
+      const worldPosition = viewer.scene.pickPosition(screenPosition);
+
+      if (Cesium.defined(worldPosition)) {
+        const cartographic = Cesium.Cartographic.fromCartesian(worldPosition);
+        const lon = Cesium.Math.toDegrees(cartographic.longitude);
+        const lat = Cesium.Math.toDegrees(cartographic.latitude);
+        const height = cartographic.height;
+
+        console.log(`📍 螢幕點 (${event.clientX}, ${event.clientY}) 對應座標：`);
+        console.log(`經度: ${lon}, 緯度: ${lat}, 高度: ${height}`);
+
+        infoBox.innerHTML = `
+📍 螢幕像素座標：
+X: ${event.clientX}
+Y: ${event.clientY}
+
+🌍 地理座標：
+經度: ${lon.toFixed(6)}
+緯度: ${lat.toFixed(6)}
+高度: ${height.toFixed(2)} m
+        `;
+
+        // 加入標記
+        viewer.entities.add({
+          position: worldPosition,
+          point: {
+            pixelSize: 10,
+            color: Cesium.Color.YELLOW
+          },
+          label: {
+            text: `(${event.clientX}, ${event.clientY})`,
+            font: "12pt sans-serif",
+            fillColor: Cesium.Color.WHITE,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            outlineWidth: 2,
+            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            pixelOffset: new Cesium.Cartesian2(0, -20)
+          }
+        });
+      } else {
+        infoBox.innerText = "⚠️ 無法取得座標（可能未渲染完成）";
+      }
+    });
+  </script>
+</body>
+</html>

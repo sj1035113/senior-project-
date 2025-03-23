@@ -41,7 +41,7 @@ uploadApp.post('/upload', (req, res) => {
   // 移除 data URL 前綴
   const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
   const filename = `screenshot_${Date.now()}.png`;
-  const uploadDir = path.join("C:\\senior_project_picture", "data_base", "1", "b");
+  const uploadDir = path.join("D:\\vscode\\D-project\\test\\SuperGluePretrainedNetwork-master\\test_file\\test_photo");
   //console.log('hello world'); // 取得 base64 長度
   
   if (!fs.existsSync(uploadDir)) {

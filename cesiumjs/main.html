@@ -4,18 +4,24 @@
   <meta charset="UTF-8">
   <title>WebSocket 與 Google Earth 3D Tiles 截圖測試</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- 載入 CesiumJS -->
   <script src="https://cesium.com/downloads/cesiumjs/releases/1.127/Build/Cesium/Cesium.js"></script>
   <link href="https://cesium.com/downloads/cesiumjs/releases/1.127/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
   <style>
-    html, body, #cesiumContainer {
-      width: 100%;
-      height: 100%;
+    html, body {
       margin: 0;
       padding: 0;
       overflow: hidden;
+      background: black;
     }
-    /* infoBox 用來顯示連線狀態與座標資訊 */
+
+    #cesiumContainer {
+      width: 1920px;
+      height: 1080px;
+      margin: 0 auto;
+      display: block;
+      position: relative;
+    }
+
     #infoBox {
       padding: 10px;
       background: rgba(255, 255, 255, 0.1);
@@ -25,169 +31,169 @@
       z-index: 1000;
       border: 1px solid rgba(255, 255, 255, 0);
       font-family: Arial, sans-serif;
+      color: white;
     }
   </style>
 </head>
 <body>
   <div id="cesiumContainer"></div>
   <div id="infoBox">等待連線...</div>
+
   <script>
-    // 設定 Cesium Ion token（請替換成你的 token）
-Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIyOGRlNTU0ZC04ZjI3LTQzZTQtYjkzOC0zZDM2Mjg1M2NhMzUiLCJpZCI6MjY5MTM4LCJpYXQiOjE3NDEyNzUwNjV9.4CesGc_KCiQ7CI0-gIIQZv_5a8ilf6yukgoRkXzo2Ag';
+    // ✅ 設定 Cesium Ion token
+    Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIyOGRlNTU0ZC04ZjI3LTQzZTQtYjkzOC0zZDM2Mjg1M2NhMzUiLCJpZCI6MjY5MTM4LCJpYXQiOjE3NDEyNzUwNjV9.4CesGc_KCiQ7CI0-gIIQZv_5a8ilf6yukgoRkXzo2Ag';
 
-// 初始化 Cesium Viewer，確保啟用 preserveDrawingBuffer
-const viewer = new Cesium.Viewer("cesiumContainer", {
-  timeline: false,
-  animation: false,
-  sceneModePicker: false,
-  baseLayerPicker: false,
-  geocoder: Cesium.IonGeocodeProviderType.GOOGLE,
-  globe: false,  // 關閉預設球體
-  contextOptions: {
-    preserveDrawingBuffer: true  // 這行必須加上
-  }
-});
-viewer.scene.skyAtmosphere.show = true;
-
-const infoBox = document.getElementById('infoBox');
-
-let ws;
-function connectWebSocket() {
-  if (!ws || ws.readyState === WebSocket.CLOSED) {
-    ws = new WebSocket('ws://localhost:8080');
-
-    ws.onopen = () => {
-      console.log("✅ WebSocket 連線成功");
-      ws.send(JSON.stringify({ identify: "cesium" }));
-    };
-
-    ws.onmessage = event => {
-      try {
-        const data = JSON.parse(event.data);
-        
-        // 處理連線確認訊息
-        if (data.status === "connected") {
-          console.log("伺服器確認識別:", data.message);
-          infoBox.innerHTML = `伺服器確認: ${data.message}`;
-          return;
-        }
-        
-        // 當收到 { event: "action", message: "get_cesium_picture" } 時才執行截圖及上傳
-        if (data.event === "action" && data.message === "get_cesium_picture") {
-          console.log("收到觸發訊息: 執行 get_cesium_picture");
-          captureAndUpload();
-          return;
-        }
-        
-        // 如果傳來的訊息含有座標資訊再進行視角更新
-        if (data.longitude && data.latitude && data.height) {
-          infoBox.innerHTML = `
-            座標更新:<br>
-            經度: ${data.longitude.toFixed(5)}<br>
-            緯度: ${data.latitude.toFixed(5)}<br>
-            高度: ${data.height}
-          `;
-          viewer.camera.setView({
-            destination: Cesium.Cartesian3.fromDegrees(
-              data.longitude,
-              data.latitude,
-              data.height
-            ),
-            orientation: {
-              heading: Cesium.Math.toRadians(data.heading || 0),
-              pitch: Cesium.Math.toRadians(data.pitch || -90),
-              roll: Cesium.Math.toRadians(data.roll || 0)
-            }
-          });
-        }
-      } catch (error) {
-        console.error("資料解析錯誤:", error, event.data);
+    // ✅ 初始化 Viewer（加入 preserveDrawingBuffer）
+    const viewer = new Cesium.Viewer("cesiumContainer", {
+      timeline: false,
+      animation: false,
+      sceneModePicker: false,
+      baseLayerPicker: false,
+      geocoder: Cesium.IonGeocodeProviderType.GOOGLE,
+      globe: false,
+      contextOptions: {
+        preserveDrawingBuffer: true
       }
-    };
-
-    ws.onerror = error => {
-      console.error("❌ WebSocket 錯誤:", error);
-      infoBox.innerHTML = "WebSocket 連線發生錯誤";
-    };
-
-    ws.onclose = () => {
-      console.warn("⚠️ WebSocket 連線已關閉，3 秒後重新連線...");
-      infoBox.innerHTML = "WebSocket 連線已關閉";
-      setTimeout(connectWebSocket, 3000);
-    };
-  }
-}
-
-// 啟動 WebSocket 連線
-connectWebSocket();
-
-// 載入 Google Earth 的 Photorealistic 3D Tiles
-(async () => {
-  try {
-    const tileset = await Cesium.createGooglePhotorealistic3DTileset({
-      onlyUsingWithGoogleGeocoder: true,
     });
-    viewer.scene.primitives.add(tileset);
-  } catch (error) {
-    console.error(`❌ Error loading Photorealistic 3D Tiles tileset: ${error}`);
-  }
-})();
+    viewer.scene.skyAtmosphere.show = true;
 
-// 截圖並用 HTTP POST 傳送給伺服器
-function captureAndUpload() {
-  console.log("開始截圖");
+    // ✅ 強制畫面解析度為 1920x1080（WebGL canvas 尺寸）
+    const width = 1920;
+    const height = 1080;
+    viewer.container.style.width = width + 'px';
+    viewer.container.style.height = height + 'px';
+    viewer.scene.canvas.width = width;
+    viewer.scene.canvas.height = height;
+    viewer.resolutionScale = 1.0;
+    viewer.scene.requestRender();
 
-// 延遲 3000 毫秒（3 秒）後執行截圖動作
-  setTimeout(() => {
-    // 強制渲染 Cesium 畫面
-    viewer.scene.render();
-    const canvas = viewer.scene.canvas;
-    const dataURL = canvas.toDataURL("image/png");
-    console.log("截圖完成");
+    const infoBox = document.getElementById('infoBox');
 
-    // 顯示當前截圖
-    displayCapturedImage(dataURL);
+    // ✅ WebSocket
+    let ws;
+    function connectWebSocket() {
+      if (!ws || ws.readyState === WebSocket.CLOSED) {
+        ws = new WebSocket('ws://localhost:8080');
 
-    // 在這裡進行 fetch 呼叫，dataURL 已定義
-    fetch("http://localhost:8081/upload", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ image: dataURL })
-    })
-    .then(response => response.json())
-    .then(data => {
-      console.log("上傳成功", data);
-    })
-    .catch(error => {
-      console.error("上傳失敗", error);
-    });
-  }, 3000);
-  console.log("test")
-}
+        ws.onopen = () => {
+          console.log("✅ WebSocket 連線成功");
+          ws.send(JSON.stringify({ identify: "cesium" }));
+        };
 
-//顯示截圖
-function displayCapturedImage(dataURL) {
-  const img = document.getElementById("screenshotPreview") || document.createElement("img");
-  img.id = "screenshotPreview";
-  img.src = dataURL;
-  img.style.position = "absolute";
-  img.style.top = "10px";
-  img.style.right = "10px";
-  img.style.width = "200px";
-  img.style.border = "2px solid red";
-  img.style.background = "#fff";
-  
-  if (!document.getElementById("screenshotPreview")) {
-    document.body.appendChild(img);
-  }
-}
-// 移除自動啟動截圖的定時呼叫
-// setTimeout(captureAndUpload, 3000);
+        ws.onmessage = event => {
+          try {
+            const data = JSON.parse(event.data);
 
+            if (data.status === "connected") {
+              console.log("伺服器確認識別:", data.message);
+              infoBox.innerHTML = `伺服器確認: ${data.message}`;
+              return;
+            }
 
-    
+            if (data.event === "action" && data.message === "get_cesium_picture") {
+              console.log("收到觸發訊息: 執行 get_cesium_picture");
+              captureAndUpload();
+              return;
+            }
+
+            if (data.longitude && data.latitude && data.height) {
+              infoBox.innerHTML = `
+                座標更新:<br>
+                經度: ${data.longitude.toFixed(5)}<br>
+                緯度: ${data.latitude.toFixed(5)}<br>
+                高度: ${data.height}
+              `;
+              viewer.camera.setView({
+                destination: Cesium.Cartesian3.fromDegrees(
+                  data.longitude,
+                  data.latitude,
+                  data.height
+                ),
+                orientation: {
+                  heading: Cesium.Math.toRadians(data.heading || 0),
+                  pitch: Cesium.Math.toRadians(data.pitch || -90),
+                  roll: Cesium.Math.toRadians(data.roll || 0)
+                }
+              });
+            }
+          } catch (error) {
+            console.error("資料解析錯誤:", error, event.data);
+          }
+        };
+
+        ws.onerror = error => {
+          console.error("❌ WebSocket 錯誤:", error);
+          infoBox.innerHTML = "WebSocket 連線發生錯誤";
+        };
+
+        ws.onclose = () => {
+          console.warn("⚠️ WebSocket 關閉，3 秒後重新連線...");
+          infoBox.innerHTML = "WebSocket 連線已關閉";
+          setTimeout(connectWebSocket, 3000);
+        };
+      }
+    }
+
+    // ✅ 啟動 WebSocket
+    connectWebSocket();
+
+    // ✅ 載入 Google Earth 3D Tiles
+    (async () => {
+      try {
+        const tileset = await Cesium.createGooglePhotorealistic3DTileset({
+          onlyUsingWithGoogleGeocoder: true,
+        });
+        viewer.scene.primitives.add(tileset);
+      } catch (error) {
+        console.error(`❌ Error loading 3D Tiles: ${error}`);
+      }
+    })();
+
+    // ✅ 擷取畫面並上傳
+    function captureAndUpload() {
+      console.log("開始截圖");
+
+      setTimeout(() => {
+        viewer.scene.render();
+        const canvas = viewer.scene.canvas;
+        const dataURL = canvas.toDataURL("image/png");
+        console.log("截圖完成");
+
+        displayCapturedImage(dataURL);
+
+        fetch("http://localhost:8081/upload", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ image: dataURL })
+        })
+        .then(response => response.json())
+        .then(data => {
+          console.log("上傳成功", data);
+        })
+        .catch(error => {
+          console.error("上傳失敗", error);
+        });
+      }, 10000);
+    }
+
+    // ✅ 顯示預覽圖片
+    function displayCapturedImage(dataURL) {
+      const img = document.getElementById("screenshotPreview") || document.createElement("img");
+      img.id = "screenshotPreview";
+      img.src = dataURL;
+      img.style.position = "absolute";
+      img.style.top = "10px";
+      img.style.right = "10px";
+      img.style.width = "200px";
+      img.style.border = "2px solid red";
+      img.style.background = "#fff";
+      
+      if (!document.getElementById("screenshotPreview")) {
+        document.body.appendChild(img);
+      }
+    }
   </script>
 </body>
 </html>
