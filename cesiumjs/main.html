@@ -90,19 +90,26 @@
               return;
             }
 
-            if (data.event === "action" && data.message === "get_cesium_picture") {
+            if (data.action === "get_cesium_picture") {
               console.log("收到觸發訊息: 執行 get_cesium_picture");
               captureAndUpload();
               return;
             }
 
-            if (data.longitude && data.latitude && data.height) {
+            if (data.action === "send_Coordinates") {
+              console.log("收到相機座標資料，更新攝影機畫面");
+              // 更新 InfoBox 顯示資訊
               infoBox.innerHTML = `
                 座標更新:<br>
                 經度: ${data.longitude.toFixed(5)}<br>
                 緯度: ${data.latitude.toFixed(5)}<br>
-                高度: ${data.height}
+                高度: ${data.height.toFixed(2)}<br>
+                朝向: ${data.heading}°<br>
+                俯仰: ${data.pitch}°<br>
+                翻滾: ${data.roll}°
               `;
+
+              // 設定 Cesium 攝影機位置與方向
               viewer.camera.setView({
                 destination: Cesium.Cartesian3.fromDegrees(
                   data.longitude,
@@ -161,6 +168,7 @@
 
         displayCapturedImage(dataURL);
 
+        // 上傳圖片到後端
         fetch("http://localhost:8081/upload", {
           method: "POST",
           headers: {
@@ -171,6 +179,16 @@
         .then(response => response.json())
         .then(data => {
           console.log("上傳成功", data);
+
+          // ✅ 傳送 WebSocket 通知伺服器上傳成功
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+              action: "upload_success"
+            }));
+            console.log("✅ 已透過 WebSocket 通知伺服器圖片上傳完成");
+          } else {
+            console.warn("⚠️ WebSocket 尚未連線，無法發送上傳成功通知");
+          }
         })
         .catch(error => {
           console.error("上傳失敗", error);

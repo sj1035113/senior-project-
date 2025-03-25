@@ -141,10 +141,10 @@ function handlePythonClient(ws) {
       const data = JSON.parse(message);
       if (data.action === "request_json") {
         // 立即處理 JSON 檔案並回應
+        console.log("test")
         jsonHandler.processJsonFile(path.join(__dirname, "..", "data_base", "test", "test.json"), ws);
       }
       else if (data.action === "get_cesium_picture"){
-        console.log("finish")
         console.log("🔍 搜尋所有 WebSocket 客戶端以找到 Cesium 客戶端...");
 
         let cesiumWs = null;
@@ -164,6 +164,7 @@ function handlePythonClient(ws) {
         }
 
       }
+      // 加入else if  叫main.py執行superglue
       else {
         ws.send(JSON.stringify({ event: "error", message: "未知的指令" }));
       }
@@ -182,6 +183,30 @@ function handleCesiumClient(ws) {
   ws.on('message', (message) => {
     const messageStr = message.toString();
     console.log("💻 : cesium client message:", messageStr);
+  
+    try {
+      const data = JSON.parse(messageStr);
+  
+      if (data.action === "upload_success") {
+        console.log("✅ 收到來自 Cesium 的上傳成功通知！");
+      
+        // 🔁 遍歷所有連線中的 client
+        wss.clients.forEach((client) => {
+          // 找出已標記為 Python client 且連線正常的
+          if (client.pythonws === true && client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({
+              notification: "got_cesium_picture",
+            }));
+            console.log("📤 已通知 Python 客戶端：got_cesium_picture");
+          }
+        });
+      } else {
+        console.log("⚠️ 收到未知 action:", data.action);
+      }
+  
+    } catch (error) {
+      console.error("❌ JSON 解析錯誤：", error);
+    }
   });
   
   ws.on('close', () => {

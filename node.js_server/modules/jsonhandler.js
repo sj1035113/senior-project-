@@ -38,14 +38,14 @@ async function processJsonFile(jsonFilePath, ws) {
         coordinates: data.coordinates,
         cameraPose: data.cameraPose
       };
-      const jsonOutputPath = path.join(folderA, folderNumber + 'flight_information.json');
+      const jsonOutputPath = path.join(folderA + 'flight_information.json');
       await fs.writeFile(jsonOutputPath, JSON.stringify(outputData, null, 2), 'utf8');
       console.log('已儲存座標與相機姿態至:', jsonOutputPath);
 
       // 5. 將相片存入 b 資料夾
       if (data.photo) {
         const photoBuffer = Buffer.from(data.photo, 'base64');
-        const photoPath = path.join(folderB, folderNumber + '.jpg');
+        const photoPath = path.join(folderB + '.jpg');
         await fs.writeFile(photoPath, photoBuffer);
         console.log('已儲存相片至:', photoPath);
       } else {
@@ -53,15 +53,13 @@ async function processJsonFile(jsonFilePath, ws) {
       }
       // 回傳狀態碼：有座標，並傳送訊息時引用 ws 參數
       await pythonConnector.sendMessage(ws, {
-        type: 'notification',
-        command: 'has_coordinate'
+        notification: 'has_coordinate'
       });
       return 'Normal';
     } else if(data.coordinates.latitude === null || data.coordinates.longitude === null) {
       console.log('JSON 中未包含座標，傳送代碼給 Python 處理。');
       await pythonConnector.sendMessage(ws, {
-        type: 'notification',
-        command: 'no_coordinate'
+        notification: 'no_coordinate'
       });
       return 'NO_COORDINATES';
     }
