@@ -45,13 +45,13 @@ async def send_request_coordinate(websocket):
             print(f"送出請求訊息：{request_msg}")
         await asyncio.sleep(3)
 
-async def run_superglue():
-    """
-    這是執行 SuperGlue 的假函式，你可以改成真實版本。
-    """
-    print("執行 SuperGlue 特徵匹配...")
-    await asyncio.sleep(1)  # 模擬處理時間
-    print("SuperGlue 執行完畢")
+def run_superglue(matching, device):
+    img0_path = r"D:\vscode\simu_db\1\b\match_test_respiberry.jpg"
+    img1_path = r"D:\vscode\simu_db\1\b\match_test_cesium.png"
+    output_dir = Path(r"D:\vscode\simu_db\1\c")
+
+    run_matching(matching, device, img0_path, img1_path,
+                 enable_viz=True, top_k='all', output_dir=output_dir)
 
 async def run_pnp():
     """
@@ -80,13 +80,12 @@ async def handle_message(result: str, websocket):
 
         case "got_cesium_picture":
             print("收到 got_cesium_picture，開始匹配")
+            run_superglue(matching, device)
 
-            img0_path = r"D:\vscode\simu_db\1\b\match_test_respiberry.jpg"
-            img1_path = r"D:\vscode\simu_db\1\b\match_test_cesium.png"
-            output_dir = Path(r"D:\vscode\simu_db\1\c")
-
-            run_matching(matching, device, img0_path, img1_path,
-                         enable_viz=True, top_k='all', output_dir=output_dir)
+            # SuperGlue 完成後，送出座標請求
+            request_msg = json.dumps({"action": "request_coordinate"})
+            await websocket.send(request_msg)
+            print(f"✅ SuperGlue 匹配完成，重新送出請求：{request_msg}")
 
             print("✅ 匹配流程完成（暫時結束）")
             raise SystemExit("測試完畢")

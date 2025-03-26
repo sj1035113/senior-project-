@@ -164,6 +164,27 @@ function handlePythonClient(ws) {
         }
 
       }
+      else if (data.action === "request_coordinate") {
+        console.log("📡 收到 Python 的 request_coordinate 訊息，準備搜尋 Cesium 客戶端並傳送座標要求...");
+      
+        let cesiumWs = null;
+      
+        // 遍歷所有 WebSocket 客戶端
+        wss.clients.forEach((client) => {
+          if (client.cesiumws === true && client.readyState === WebSocket.OPEN) {
+            cesiumWs = client;
+          }
+        });
+      
+        if (cesiumWs) {
+          console.log("✅ 找到 Cesium 客戶端，傳送 action: send_Coordinates");
+          cesiumWs.send(JSON.stringify({
+            action: "send_Coordinates"
+          }));
+        } else {
+          console.log("❌ 找不到任何 Cesium 客戶端，請確認是否已連接");
+        }
+      }
       // 加入else if  叫main.py執行superglue
       else {
         ws.send(JSON.stringify({ event: "error", message: "未知的指令" }));
