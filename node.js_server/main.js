@@ -177,15 +177,29 @@ function handlePythonClient(ws) {
         });
       
         if (cesiumWs) {
-          console.log("✅ 找到 Cesium 客戶端，傳送 action: send_Coordinates");
+          console.log("✅ 找到 Cesium 客戶端，傳送 action: send_pixel_Coordinates");
+      
+          // 通知 Cesium 即將接收匹配點
           cesiumWs.send(JSON.stringify({
-            action: "send_Coordinates"
+            action: "send_pixel_Coordinates"
           }));
+      
+          // 📦 呼叫模組載入匹配點並傳送（這裡會讀 JSON 檔）
+          const matchJsonPath = "D:\\vscode\\simu_db\\1\\c\\match_test_respiberry_match_test_cesium_matches.json";
+
+          coordinateSender.sendPixelCoordinateFromFile(matchJsonPath, cesiumWs)
+            .then(success => {
+              if (success) {
+                console.log("✅ 匹配點資料已成功送給 Cesium");
+              } else {
+                console.log("❌ 匹配點資料傳送失敗");
+              }
+            });
+      
         } else {
           console.log("❌ 找不到任何 Cesium 客戶端，請確認是否已連接");
         }
       }
-      // 加入else if  叫main.py執行superglue
       else {
         ws.send(JSON.stringify({ event: "error", message: "未知的指令" }));
       }

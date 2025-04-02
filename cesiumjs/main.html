@@ -123,6 +123,74 @@
                 }
               });
             }
+
+            if (data.action === "send_pixel_Coordinates") {
+              console.log("✅ 收到 pixel 座標要求（send_pixel_Coordinates）訊息");
+              return;
+            }
+
+            if (data.action === "top_match_pixels") {
+              console.log("✅ 收到 top_match_pixels 訊息");
+
+              const scene = viewer.scene;
+              const results = [];
+
+              data.pixels.forEach((pixel, index) => {
+                const x = pixel.x;
+                const y = pixel.y;
+                const screenPosition = new Cesium.Cartesian2(x, y);
+                const worldPosition = scene.pickPosition(screenPosition);
+
+                if (Cesium.defined(worldPosition)) {
+                  const cartographic = Cesium.Cartographic.fromCartesian(worldPosition);
+                  const longitude = Cesium.Math.toDegrees(cartographic.longitude);
+                  const latitude = Cesium.Math.toDegrees(cartographic.latitude);
+                  const height = cartographic.height;
+
+                  results.push({
+                    x,
+                    y,
+                    longitude,
+                    latitude,
+                    height
+                  });
+
+                  // ✅ 可視化標記（可選）
+                  viewer.entities.add({
+                    position: worldPosition,
+                    point: {
+                      pixelSize: 6,
+                      color: Cesium.Color.YELLOW
+                    },
+                    label: {
+                      text: `(${x.toFixed(0)}, ${y.toFixed(0)})`,
+                      font: "10pt sans-serif",
+                      fillColor: Cesium.Color.WHITE,
+                      style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+                      outlineWidth: 1,
+                      verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+                      pixelOffset: new Cesium.Cartesian2(0, -10)
+                    }
+                  });
+
+                } else {
+                  console.warn(`⚠️ 第 ${index + 1} 點 (${x}, ${y}) 無法取得世界座標`);
+                }
+              });
+
+              console.log("📌 轉換完成的 3D 座標：", results);
+
+              // ✅ 可選：傳回給伺服器
+              if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                  action: "top_match_world_coordinates",
+                  points: results
+                }));
+              }
+
+              return;
+            }
+
           } catch (error) {
             console.error("資料解析錯誤:", error, event.data);
           }
