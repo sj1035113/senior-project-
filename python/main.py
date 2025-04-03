@@ -87,8 +87,12 @@ async def handle_message(result: str, websocket):
             await websocket.send(request_msg)
             print(f"✅ SuperGlue 匹配完成，重新送出請求：{request_msg}")
 
+        case "got_match_world_coordinates":
+            print("開始進行pnp配對")
             print("✅ 匹配流程完成（暫時結束）")
             raise SystemExit("測試完畢")
+        
+
 
         case None:
             print("未能解析的訊息，略過")

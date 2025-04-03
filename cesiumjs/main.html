@@ -180,10 +180,10 @@
 
               console.log("📌 轉換完成的 3D 座標：", results);
 
-              // ✅ 可選：傳回給伺服器
+              // 傳回給伺服器
               if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({
-                  action: "top_match_world_coordinates",
+                  action: "got_match_world_coordinates",
                   points: results
                 }));
               }

@@ -92,37 +92,46 @@ wss.on('connection', (ws, req) => {
   // 監聽客戶端傳來的訊息
   ws.on('message', (message) => {
     const messageStr = message.toString();
-    console.log('Received message:', messageStr);
-    
+  
+    let data;
     try {
-      const data = JSON.parse(message); // 解析 JSON 訊息
-
-      // Modified: 如果有 identify 屬性則進行後續處理
-      if (data.identify) {
-        if (data.identify.toLowerCase() === 'python') {
-          ws.pythonws = true;  // 標記此連線為 Python 客戶端
-          console.log('🐍 Python client connected, establishing pythonws...');
-          handlePythonClient(ws);  // 設定 Python 客戶端的專屬監聽器
-        }
-        else if (data.identify.toLowerCase() === 'cesium') {
-          ws.cesiumws = true;  // 標記此連線為cesium客戶端
-          console.log('Cesium client connected, establishing cesiumws...');
-          handleCesiumClient(ws);  // 設定 Cesium 客戶端的監聽器
-        }
-        else {
-          console.log('Non-python client connected with identify:', data.identify);
-          handleDefaultClient(ws); // 設定一般客戶端的監聽器
-        }
+      data = JSON.parse(messageStr);
+    } catch (err) {
+      console.error("❌ JSON 解析錯誤:", err);
+      return; // ❌ 錯誤就直接中止，不再繼續處理
+    }
+  
+    // ✅ 確認 action 是世界座標（不噴整份 JSON）
+    if (data.action === "got_match_world_coordinates") {
+      
+    } else {
+      console.log('Received message:', messageStr);
+    }
+  
+    // ✅ 客戶端身份識別流程（只需要一次 JSON 物件）
+    if (data.identify) {
+      if (data.identify.toLowerCase() === 'python') {
+        ws.pythonws = true;
+        console.log('🐍 Python client connected, establishing pythonws...');
+        handlePythonClient(ws);
+      } else if (data.identify.toLowerCase() === 'cesium') {
+        ws.cesiumws = true;
+        console.log('🪐 Cesium client connected, establishing cesiumws...');
+        handleCesiumClient(ws);
       } else {
-        // Modified: 如果沒有 identify 屬性且該客戶端未被註冊，則輸出提示訊息
-        if (!ws.pythonws && !ws.cesiumws) {
-          console.log("有來亂的");
-        }
+        console.log('👀 Unknown client identify:', data.identify);
+        handleDefaultClient(ws);
       }
-    } catch (error) {
-      console.error('❌ Error parsing JSON message:', error);
+    } else {
+      if (!ws.pythonws && !ws.cesiumws) {
+        console.log("🚨 未註冊的客戶端，請確認 identify 是否正確");
+      }
     }
   });
+  ws.on('close', () => {
+    // console.log("❌ Client disconnected");
+  });
+  
 
   // 監聽客戶端斷線
   ws.on('close', () => {
@@ -217,26 +226,61 @@ function handleCesiumClient(ws) {
   
   ws.on('message', (message) => {
     const messageStr = message.toString();
-    console.log("💻 : cesium client message:", messageStr);
+    try {
+      const data = JSON.parse(messageStr);
+    
+      if (data.action === "got_match_world_coordinates") {
+        console.log(`🌍 收到世界座標，共 ${data.points.length} 點`);
+      } else {
+        console.log("💻 : cesium client message:", messageStr);
+      }
+    } catch (err) {
+      console.error("❌ JSON 解析錯誤:", err);
+    }
   
     try {
       const data = JSON.parse(messageStr);
   
-      if (data.action === "upload_success") {
-        console.log("✅ 收到來自 Cesium 的上傳成功通知！");
+      switch (data.action) {
+        case "upload_success":
+          console.log("✅ 收到來自 Cesium 的上傳成功通知！");
       
-        // 🔁 遍歷所有連線中的 client
-        wss.clients.forEach((client) => {
-          // 找出已標記為 Python client 且連線正常的
-          if (client.pythonws === true && client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify({
-              notification: "got_cesium_picture",
-            }));
-            console.log("📤 已通知 Python 客戶端：got_cesium_picture");
-          }
-        });
-      } else {
-        console.log("⚠️ 收到未知 action:", data.action);
+          // 🔁 遍歷所有連線中的 client
+          wss.clients.forEach((client) => {
+            // 找出已標記為 Python client 且連線正常的
+            if (client.pythonws === true && client.readyState === WebSocket.OPEN) {
+              client.send(JSON.stringify({
+                notification: "got_cesium_picture",
+              }));
+              console.log("📤 已通知 Python 客戶端：got_cesium_picture");
+            }
+          });
+          break;
+      
+        case "got_match_world_coordinates":
+          console.log("🌍 收到世界座標");
+
+          const savePath = "D:/vscode/simu_db/1/c/match_test_respiberry_match_test_cesium_matches.json";
+        
+          fs.writeFileSync(savePath, JSON.stringify(data, null, 2), "utf8");
+          console.log(`📁 已成功儲存座標至 ${savePath}`);
+        
+          // 🔁 通知所有 Python 客戶端：got the coordinate
+          wss.clients.forEach((client) => {
+            if (client.pythonws === true && client.readyState === WebSocket.OPEN) {
+              client.send(JSON.stringify({
+                notification: "got_match_world_coordinates"
+              }));
+              console.log("📤 已通知 Python 客戶端：got_match_world_coordinates");
+            }
+          });
+
+          break;
+      
+      
+        default:
+          console.log("⚠️ 收到未知 action:", data.action);
+          break;
       }
   
     } catch (error) {
