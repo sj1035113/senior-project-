@@ -53,8 +53,7 @@ uploadApp.post('/upload', (req, res) => {
     return res.status(500).send("Failed to read execution.json");
   }
 
-  // 儲存圖片的資料夾：D:\vscode\D-project\formal\data_base\{serial_number}\b\
-  const baseFolder = path.join('D:', 'vscode', 'D-project', 'formal', 'data_base');
+  const baseFolder = path.join(__dirname, '..', 'data_base');  // 回到上層再進入 data_base
   const uploadDir = path.join(baseFolder, String(serialNumber), 'b');
 
   // 確保資料夾存在
@@ -227,7 +226,7 @@ function handlePythonClient(ws) {
 
           // 組合 JSON 路徑
           const matchJsonPath = path.join(
-            'D:', 'vscode', 'D-project', 'formal', 'data_base',
+            __dirname, '..', 'data_base',
             String(serialNumber), 'c', 'respiberry_cesium_matches.json'
           );
 
@@ -310,7 +309,7 @@ function handleCesiumClient(ws) {
 
           // ✅ 動態組成儲存路徑
           const savePath = path.join(
-            'D:', 'vscode', 'D-project', 'formal', 'data_base',
+            __dirname, '..', 'data_base',
             String(serialNumber), 'c', 'respiberry_cesium_matches.json'
           );
         

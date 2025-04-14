@@ -50,13 +50,13 @@ async def send_request_coordinate(websocket):
 
 def run_superglue(matching, device):
     # 1. 讀取 execution.json
-    execution_path = Path(r"D:\vscode\D-project\formal\execution.json")
+    execution_path = Path(__file__).resolve().parent.parent / "execution.json"
     with open(execution_path, 'r', encoding='utf-8') as f:
         config = json.load(f)
     serial_number = str(config['serial_numbers'])  # 確保轉成字串
 
     # 2. 根據 serial_number 決定路徑
-    base_path = Path(r"D:\vscode\D-project\formal\data_base") / serial_number
+    base_path = Path(__file__).resolve().parent.parent / "data_base" / serial_number
     input_dir = base_path / "b"
     output_dir = base_path / "c"
 
@@ -103,12 +103,16 @@ async def handle_message(result: str, websocket):
         case "got_match_world_coordinates":
             print("開始進行pnp配對")
             # === 讀取 serial_number ===
-            with open(r"D:\vscode\D-project\formal\execution.json", "r", encoding="utf-8") as f:
+            execution_path = Path(__file__).resolve().parent.parent / "execution.json"
+
+            with open(execution_path, "r", encoding="utf-8") as f:
                 config = json.load(f)
             serial_number = str(config["serial_numbers"])
 
-            # === 組出 JSON 路徑 ===
-            match_json_path = Path(r"D:\vscode\D-project\formal\data_base") / serial_number / "c" / "respiberry_cesium_matches.json"
+            # C:\D-project\senior-project- (← 回到 python 的上層)
+            base_path = Path(__file__).resolve().parent.parent
+            match_json_path = base_path / "data_base" / serial_number / "c" / "respiberry_cesium_matches.json"
+
 
             # === 呼叫 PnP 函式 ===
             lat, lon, height = run_solvepnp_from_json(str(match_json_path))
