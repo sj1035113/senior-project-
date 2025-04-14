@@ -105,6 +105,8 @@ def run_matching(matching, device, img0_path, img1_path,
                  enable_viz=False, top_k='all', output_dir=Path("output")):
     print(f"\n🔍 開始匹配：\n  圖片1: {img0_path}\n  圖片2: {img1_path}")
 
+    # ✅ 確保 output_dir 存在（如果沒有就建立）
+    output_dir.mkdir(parents=True, exist_ok=True)
     w0, h0 = Image.open(img0_path).size
     w1, h1 = Image.open(img1_path).size
 

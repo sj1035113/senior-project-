@@ -27,7 +27,7 @@ apiServer.listen(HTTP_PORT, () => {
   console.log(`HTTP Server running on http://localhost:${HTTP_PORT}`);
 });
 
-// --------------------- 圖片上傳伺服器 (UPLOAD_PORT) ---------------------
+// --------------------- 圖片上傳伺服器 (UPLOAD_PORT) -----------h----------
 const uploadApp = express();
 uploadApp.use(cors());
 uploadApp.use(express.json({ limit: '50mb' }));
@@ -37,28 +37,44 @@ uploadApp.post('/upload', (req, res) => {
   if (!image) {
     return res.status(400).send("No image provided");
   }
-  
-  // 移除 data URL 前綴
-  const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
-  const filename = `screenshot_${Date.now()}.png`;
-  const uploadDir = path.join("D:\\vscode\\D-project\\test\\SuperGluePretrainedNetwork-master\\test_file\\test_photo");
-  //console.log('hello world'); // 取得 base64 長度
-  
+
+  // 讀取 execution.json
+  const executionPath = path.join(__dirname, '..', 'execution.json');
+  let serialNumber = null;
+
+  try {
+    const executionData = JSON.parse(fs.readFileSync(executionPath, 'utf8'));
+    serialNumber = executionData.serial_numbers;
+    if (!serialNumber) {
+      return res.status(500).send("serial_numbers not found in execution.json");
+    }
+  } catch (err) {
+    console.error("Error reading execution.json:", err);
+    return res.status(500).send("Failed to read execution.json");
+  }
+
+  // 儲存圖片的資料夾：D:\vscode\D-project\formal\data_base\{serial_number}\b\
+  const baseFolder = path.join('D:', 'vscode', 'D-project', 'formal', 'data_base');
+  const uploadDir = path.join(baseFolder, String(serialNumber), 'b');
+
+  // 確保資料夾存在
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
   }
-  
+
+  // 儲存圖片
+  const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
+  const filename = `cesium.png`;
   const filePath = path.join(uploadDir, filename);
-  //以下
+
   fs.writeFile(filePath, base64Data, 'base64', (err) => {
     if (err) {
       console.error("Error saving image:", err);
       return res.status(500).send("Error saving image");
     }
+    console.log(`Image uploaded and saved as ${filePath}`);
     res.json({ message: "Image saved", filename });
   });
-  console.log(`Image uploaded and saved as ${filePath}`);
-  // 以上
 });
 
 const uploadServer = http.createServer(uploadApp);
@@ -194,7 +210,27 @@ function handlePythonClient(ws) {
           }));
       
           // 📦 呼叫模組載入匹配點並傳送（這裡會讀 JSON 檔）
-          const matchJsonPath = "D:\\vscode\\simu_db\\1\\c\\match_test_respiberry_match_test_cesium_matches.json";
+          const executionPath = path.join(__dirname, '..', 'execution.json');
+          let serialNumber = null;
+
+          try {
+            const executionData = JSON.parse(fs.readFileSync(executionPath, 'utf8'));
+            serialNumber = executionData.serial_numbers;
+            if (!serialNumber) {
+              throw new Error("serial_numbers not found");
+            }
+          } catch (err) {
+            console.error("⚠️ 無法讀取 execution.json:", err);
+            // 根據你的應用情境可選擇中止流程或使用預設值
+            return;
+          }
+
+          // 組合 JSON 路徑
+          const matchJsonPath = path.join(
+            'D:', 'vscode', 'D-project', 'formal', 'data_base',
+            String(serialNumber), 'c', 'respiberry_cesium_matches.json'
+          );
+
 
           coordinateSender.sendPixelCoordinateFromFile(matchJsonPath, cesiumWs)
             .then(success => {
@@ -260,7 +296,23 @@ function handleCesiumClient(ws) {
         case "got_match_world_coordinates":
           console.log("🌍 收到世界座標");
 
-          const savePath = "D:/vscode/simu_db/1/c/match_test_respiberry_match_test_cesium_matches.json";
+          const executionPath = path.join(__dirname, '..', 'execution.json');
+          let serialNumber = null;
+
+          try {
+            const executionData = JSON.parse(fs.readFileSync(executionPath, 'utf8'));
+            serialNumber = executionData.serial_numbers;
+            if (!serialNumber) throw new Error("serial_numbers not found in execution.json");
+          } catch (err) {
+            console.error("❌ 無法讀取 execution.json:", err);
+            return;
+          }
+
+          // ✅ 動態組成儲存路徑
+          const savePath = path.join(
+            'D:', 'vscode', 'D-project', 'formal', 'data_base',
+            String(serialNumber), 'c', 'respiberry_cesium_matches.json'
+          );
         
           fs.writeFileSync(savePath, JSON.stringify(data, null, 2), "utf8");
           console.log(`📁 已成功儲存座標至 ${savePath}`);

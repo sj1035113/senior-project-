@@ -7,6 +7,9 @@ from pathlib import Path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'module'))
 from module.superglue import init_model, run_matching
 from module.websocket import connect_and_handshake, listen_one
+from module.pnp import run_solvepnp_from_json
+
+
 
 requesting_coordinate = True
 matching, device = init_model()
@@ -46,9 +49,19 @@ async def send_request_coordinate(websocket):
         await asyncio.sleep(3)
 
 def run_superglue(matching, device):
-    img0_path = r"D:\vscode\simu_db\1\b\match_test_respiberry.jpg"
-    img1_path = r"D:\vscode\simu_db\1\b\match_test_cesium.png"
-    output_dir = Path(r"D:\vscode\simu_db\1\c")
+    # 1. 讀取 execution.json
+    execution_path = Path(r"D:\vscode\D-project\formal\execution.json")
+    with open(execution_path, 'r', encoding='utf-8') as f:
+        config = json.load(f)
+    serial_number = str(config['serial_numbers'])  # 確保轉成字串
+
+    # 2. 根據 serial_number 決定路徑
+    base_path = Path(r"D:\vscode\D-project\formal\data_base") / serial_number
+    input_dir = base_path / "b"
+    output_dir = base_path / "c"
+
+    img0_path = input_dir / "respiberry.jpg"
+    img1_path = input_dir / "cesium.png"
 
     run_matching(matching, device, img0_path, img1_path,
                  enable_viz=True, top_k='all', output_dir=output_dir)
@@ -89,6 +102,17 @@ async def handle_message(result: str, websocket):
 
         case "got_match_world_coordinates":
             print("開始進行pnp配對")
+            # === 讀取 serial_number ===
+            with open(r"D:\vscode\D-project\formal\execution.json", "r", encoding="utf-8") as f:
+                config = json.load(f)
+            serial_number = str(config["serial_numbers"])
+
+            # === 組出 JSON 路徑 ===
+            match_json_path = Path(r"D:\vscode\D-project\formal\data_base") / serial_number / "c" / "respiberry_cesium_matches.json"
+
+            # === 呼叫 PnP 函式 ===
+            lat, lon, height = run_solvepnp_from_json(str(match_json_path))
+            print(f"相機 WGS84 位置：緯度 = {lat:.6f}, 經度 = {lon:.6f}, 高度 = {height:.2f} m")
             print("✅ 匹配流程完成（暫時結束）")
             raise SystemExit("測試完畢")
         

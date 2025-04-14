@@ -1,4 +1,5 @@
 const fs = require('fs');
+const path = require('path')
 
 /**
  * 傳送前 45 個 SuperGlue 匹配點（像素座標）給 Cesium 前端
@@ -56,23 +57,40 @@ async function sendPixelCoordinateFromFile(jsonPath, ws) {
  * @param {WebSocket} ws - Cesium WebSocket 連線物件
  */
 function sendCoordinates(ws) {
-  const cameraData = {
-    action: "send_Coordinates",
-    longitude: 120.648803,
-    latitude: 24.177211,
-    height: 140.3697528082066,
-    heading: 330,
-    pitch: -1.7,
-    roll: 0
-  };
+  // 1️⃣ 讀取 execution.json
+  const executionPath = path.join(__dirname, '..', '..', 'execution.json');
+  let serialNumber = null;
 
+  try {
+    const executionData = JSON.parse(fs.readFileSync(executionPath, 'utf8'));
+    serialNumber = executionData.serial_numbers;
+    if (!serialNumber) throw new Error("serial_numbers not found in execution.json");
+  } catch (err) {
+    console.error("❌ 無法讀取 execution.json:", err);
+    return;
+  }
+
+  // 2️⃣ 根據 serial_number 讀取 flight_information.json
+  const flightInfoPath = path.join(
+    __dirname, '..', '..', 'data_base',
+    String(serialNumber), 'a', 'flight_information.json'
+  );
+
+  let cameraData;
+  try {
+    cameraData = JSON.parse(fs.readFileSync(flightInfoPath, 'utf8'));
+    cameraData.action = "send_Coordinates"; // 加入 action
+  } catch (err) {
+    console.error("❌ 無法讀取 flight_information.json:", err);
+    return;
+  }
+
+  // 3️⃣ 傳送相機姿態資訊
   ws.send(JSON.stringify(cameraData));
-  console.log("📡 已傳送 camera 座標資訊");
+  console.log("📡 已傳送 camera 座標資訊:", cameraData);
 
-  const actionMessage = {
-    action: "get_cesium_picture"
-  };
-
+  // 4️⃣ 要求 Cesium 擷取畫面
+  const actionMessage = { action: "get_cesium_picture" };
   ws.send(JSON.stringify(actionMessage));
   console.log("📸 已要求 Cesium 擷取畫面");
 }
