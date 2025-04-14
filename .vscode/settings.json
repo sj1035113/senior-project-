@@ -8,6 +8,7 @@
       "../data_base/**/*.jpg",
       "../data_base/**/*.png"
     ],
-    "liveServer.settings.wait": 999999
+    "liveServer.settings.wait": 999999,
+    "liveServer.settings.port": 5501
   }
   
