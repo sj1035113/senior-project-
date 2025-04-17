@@ -7,3 +7,5 @@
     ，如果正常則會繼續進行，如果沒有座標就會觸發"方法論"，向js發送 "要求cesium圖"的指令，目前是寫到這樣
 -- 總結:1. main.js增加了對不同客戶端的支持 2.main.py每三秒傳要求讀取json並返回座標狀況如果錯誤，觸發方法論。下次寫會從js伺服器的"
    接受no_coodinate"開始寫，main.js已經有了基礎架構，主要邏輯應該是不會動了，main.py還需要進一步整理(預計在superglue那邊)
+
+-- 啟動伺服器 http-server -p 5500 啟動瀏覽器 http://localhost:5500/main.html
