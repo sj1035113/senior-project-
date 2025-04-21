@@ -117,8 +117,6 @@ async def handle_message(result: str, websocket):
             # === 呼叫 PnP 函式 ===
             lat, lon, height = run_solvepnp_from_json(str(match_json_path))
             print(f"相機 WGS84 位置：緯度 = {lat:.6f}, 經度 = {lon:.6f}, 高度 = {height:.2f} m")
-            print("✅ 匹配流程完成（暫時結束）")
-            raise SystemExit("測試完畢")
         
 
 

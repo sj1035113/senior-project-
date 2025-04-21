@@ -1,19 +1,24 @@
 const path = require('path');
 const http = require('http');
-const WebSocket = require('ws');  // 使用 ws 模組
+const WebSocket = require('ws');
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
+const bodyParser = require('body-parser');
+const triggerPhoto = require("./modules/trigger_photo.js");
+const { waitForFile } = require('./modules/waitForFile');
+
+// 模組引入
 const jsonHandler = require(path.join(__dirname, "modules", "jsonhandler.js"));
-const coordinateSender  = require(path.join(__dirname, "modules", "coordinateSender.js")); // 引用模組
+const coordinateSender = require(path.join(__dirname, "modules", "coordinateSender.js"));
 
+// Port 設定
+const HTTP_PORT = 3000;
+const WS_PORT = 8080;
+const UPLOAD_PORT = 8081;
+const JSON_SERVER_PORT = 5000;
 
-// 宣告伺服器port腳
-const HTTP_PORT = 3000;      // HTTP 伺服器的埠號（可供其他 API 使用）
-const WS_PORT = 8080;        // WebSocket 伺服器的埠號
-const UPLOAD_PORT = 8081;    // 圖片上傳用的 HTTP 伺服器埠號（與 WebSocket 分開）
-
-// --------------------- API 伺服器 (HTTP_PORT) ---------------------
+// -------------------- HTTP API Server (HTTP_PORT) --------------------
 const apiApp = express();
 apiApp.use(cors());
 apiApp.use(express.json({ limit: '50mb' }));
@@ -24,10 +29,10 @@ apiApp.get('/', (req, res) => {
 
 const apiServer = http.createServer(apiApp);
 apiServer.listen(HTTP_PORT, () => {
-  console.log(`HTTP Server running on http://localhost:${HTTP_PORT}`);
+  console.log(`🌐 HTTP Server running on http://localhost:${HTTP_PORT}`);
 });
 
-// --------------------- 圖片上傳伺服器 (UPLOAD_PORT) -----------h----------
+// -------------------- Upload Server (UPLOAD_PORT) --------------------
 const uploadApp = express();
 uploadApp.use(cors());
 uploadApp.use(express.json({ limit: '50mb' }));
@@ -38,7 +43,6 @@ uploadApp.post('/upload', (req, res) => {
     return res.status(400).send("No image provided");
   }
 
-  // 讀取 execution.json
   const executionPath = path.join(__dirname, '..', 'execution.json');
   let serialNumber = null;
 
@@ -53,15 +57,13 @@ uploadApp.post('/upload', (req, res) => {
     return res.status(500).send("Failed to read execution.json");
   }
 
-  const baseFolder = path.join(__dirname, '..', 'data_base');  // 回到上層再進入 data_base
+  const baseFolder = path.join(__dirname, '..', 'data_base');
   const uploadDir = path.join(baseFolder, String(serialNumber), 'b');
 
-  // 確保資料夾存在
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
   }
 
-  // 儲存圖片
   const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
   const filename = `cesium.png`;
   const filePath = path.join(uploadDir, filename);
@@ -71,28 +73,68 @@ uploadApp.post('/upload', (req, res) => {
       console.error("Error saving image:", err);
       return res.status(500).send("Error saving image");
     }
-    console.log(`Image uploaded and saved as ${filePath}`);
+    console.log(`🖼️ Image uploaded and saved as ${filePath}`);
     res.json({ message: "Image saved", filename });
   });
 });
 
 const uploadServer = http.createServer(uploadApp);
 uploadServer.listen(UPLOAD_PORT, () => {
-  console.log(`Upload Server running on http://localhost:${UPLOAD_PORT}`);
+  console.log(`🖼️ Upload Server running on http://localhost:${UPLOAD_PORT}`);
 });
 
-// 建立 websocket HTTP 伺服器
-const server = http.createServer((req, res) => {
+// -------------------- WebSocket Server (WS_PORT) --------------------
+const wsHttpServer = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('WebSocket Server is running...\n');
 });
 
-server.listen(WS_PORT, () => {
-  console.log(`🚀 Server is listening on port ${WS_PORT}`);
+wsHttpServer.listen(WS_PORT, () => {
+  console.log(`🔌 WebSocket Server listening on port ${WS_PORT}`);
 });
 
-// 在同一個 HTTP 伺服器上建立 WebSocket 伺服器
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({ server: wsHttpServer });
+
+// -------------------- JSON Upload & Trigger Server (JSON_SERVER_PORT) --------------------
+let takePhotoFlag = false;
+const jsonApp = express();
+jsonApp.use(bodyParser.json({ limit: '20mb' }));
+
+jsonApp.get("/", (req, res) => {
+  res.send("📡 JS JSON Server running");
+});
+
+jsonApp.get("/need_photo", (req, res) => {
+  res.json({ take_photo: takePhotoFlag });
+  takePhotoFlag = false;
+});
+
+jsonApp.post("/trigger_photo", (req, res) => {
+  takePhotoFlag = true;
+  res.json({ status: "Flag set to TRUE" });
+});
+
+jsonApp.post("/upload", (req, res) => {
+  const jsonData = req.body;
+
+  // 🔁 使用相對路徑回到上一層資料夾，再進入 data_base/test/
+  const folder = path.join(__dirname, '..', 'data_base', 'test');
+
+  if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true });
+
+  const filename = 'test1.json'; //${jsonData.timestamp || Date.now()}這邊改為時間戳
+  const filepath = path.join(folder, filename);
+
+  fs.writeFileSync(filepath, JSON.stringify(jsonData, null, 2));
+
+  console.log(`✅ Received JSON uploaded to: ${filepath}`);
+  res.json({ status: "Upload success", saved_as: filename });
+});
+
+jsonApp.listen(JSON_SERVER_PORT, '0.0.0.0', () => {
+  console.log(`📡 JSON Upload Server running at http://localhost:${JSON_SERVER_PORT}`);
+});
+
 
 /**
  * 🟢 監聽新的 WebSocket 連線
@@ -132,6 +174,7 @@ wss.on('connection', (ws, req) => {
       } else if (data.identify.toLowerCase() === 'cesium') {
         ws.cesiumws = true;
         console.log('🪐 Cesium client connected, establishing cesiumws...');
+        //handlehtml.join
         handleCesiumClient(ws);
       } else {
         console.log('👀 Unknown client identify:', data.identify);
@@ -158,15 +201,29 @@ wss.on('connection', (ws, req) => {
  * 🔹 處理 Python 客戶端的 WebSocket 連線
  */
 function handlePythonClient(ws) {
-  ws.on('message', (message) => {
+  ws.on('message', async (message) => {
     const messageStr = message.toString();
     console.log("🐍 Python client message:", messageStr);
     try {
       const data = JSON.parse(message);
       if (data.action === "request_json") {
-        // 立即處理 JSON 檔案並回應
-        console.log("test")
-        jsonHandler.processJsonFile(path.join(__dirname, "..", "data_base", "test", "test.json"), ws);
+        try {
+          await triggerPhoto.triggerPhoto();
+          const jsonPath = path.join(__dirname, "..", "data_base", "test", "test1.json"); 
+          const found = await waitForFile(jsonPath, 10000); // 最多等 5 秒
+          console.log("111讀取到檔案")
+          if (!found) {
+            ws.send(JSON.stringify({ error: "等待 JSON 超時，檔案未上傳" }));
+            return;
+          }
+      
+          const result = await jsonHandler.processJsonFile(jsonPath, ws);
+          console.log("✅ JSON 處理完成，結果：", result);
+      
+        } catch (err) {
+          console.error("❌ request_json 處理失敗:", err.message);
+          ws.send(JSON.stringify({ error: "處理 JSON 時發生錯誤", detail: err.message }));
+        }
       }
       else if (data.action === "get_cesium_picture"){
         console.log("🔍 搜尋所有 WebSocket 客戶端以找到 Cesium 客戶端...");
