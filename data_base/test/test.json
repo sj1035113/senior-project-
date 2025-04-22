@@ -4,16 +4,19 @@
       "x": 1.0,
       "y": 2.0,
       "z": 3.0
-    },
+    }
+  },
+  "drone_pose": {
     "orientation": {
-      "roll": 0.1,
-      "pitch": 0.2,
-      "yaw": 0.3
+      "heading": 330,
+      "pitch": -1.7,
+      "roll": 0
     }
   },
   "coordinates": {
-    "latitude": null,
-    "longitude": null 
+    "latitude": 24.177211,
+    "longitude": 120.648803,
+    "height": 140.3697528082066
   },
-  "photo": "D:\\vscode\\D-project\\formal\\data_base\\test\\test_base64.txt"
+  "photo": null
 }

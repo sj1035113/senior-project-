@@ -98,6 +98,7 @@
 
             if (data.action === "send_Coordinates") {
               console.log("收到相機座標資料，更新攝影機畫面");
+              data.height += 20;
               // 更新 InfoBox 顯示資訊
               infoBox.innerHTML = `
                 座標更新:<br>

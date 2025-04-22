@@ -27,7 +27,7 @@ apiServer.listen(HTTP_PORT, () => {
   console.log(`HTTP Server running on http://localhost:${HTTP_PORT}`);
 });
 
-// --------------------- 圖片上傳伺服器 (UPLOAD_PORT) -----------h----------
+// --------------------- 圖片上傳伺服器 (UPLOAD_PORT) ---------------------
 const uploadApp = express();
 uploadApp.use(cors());
 uploadApp.use(express.json({ limit: '50mb' }));
@@ -164,9 +164,39 @@ function handlePythonClient(ws) {
     try {
       const data = JSON.parse(message);
       if (data.action === "request_json") {
-        // 立即處理 JSON 檔案並回應
-        console.log("test")
-        jsonHandler.processJsonFile(path.join(__dirname, "..", "data_base", "test", "test.json"), ws);
+        console.log("📥 收到 request_json，準備觸發處理 JSON");
+      
+        try {
+          // 1. 讀取 execution.json 的 serial_numbers 欄位
+          const executionPath = path.join(__dirname, '..', 'execution.json');
+          const executionData = JSON.parse(fs.readFileSync(executionPath, 'utf8'));
+          const serialNumber = executionData.serial_numbers;
+      
+          if (!serialNumber) {
+            throw new Error("❌ execution.json 中缺少 serial_numbers 欄位");
+          }
+      
+          // 2. 建立對應的資料夾 data_base/{serialNumber}
+          const basePath = path.join(__dirname, '..', 'data_base');
+          const parentFolder = path.join(basePath, String(serialNumber));
+      
+          if (!fs.existsSync(parentFolder)) {
+            fs.mkdirSync(parentFolder, { recursive: true });
+            console.log(`📁 已建立資料夾: ${parentFolder}`);
+          } else {
+            console.log(`📁 資料夾已存在: ${parentFolder}`);
+          }
+      
+          // 3. 接著處理 JSON（test.json 是樹莓派傳來的）目前是使用test.json，之後的數據會由樹梅派從過來，這邊會需要merge
+          const testJsonPath = path.join(__dirname, "..", "data_base", "test", "test1.json"); 
+          //test是有座標資訊 test1沒有座標
+          console.log("test")
+          jsonHandler.processJsonFile(testJsonPath, ws);
+      
+        } catch (err) {
+          console.error("❌ request_json 處理失敗:", err.message);
+          ws.send(JSON.stringify({ error: "處理 JSON 發生錯誤", detail: err.message }));
+        }
       }
       else if (data.action === "get_cesium_picture"){
         console.log("🔍 搜尋所有 WebSocket 客戶端以找到 Cesium 客戶端...");

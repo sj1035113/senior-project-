@@ -16,6 +16,13 @@ matching, device = init_model()
 
 # 狀態變數：是否要定時傳送 request_coordinate
 requesting_coordinate = True
+ #重置，初始化
+def reset_serial_number():
+    execution_path = Path(__file__).resolve().parent.parent / "execution.json"
+    with open(execution_path, "w", encoding="utf-8") as f:
+        json.dump({"serial_numbers": 1}, f, indent=4, ensure_ascii=False)
+    print("🔄 已將 serial_number 重置為 1")
+
 
 def process_message(message: str):
     """
@@ -66,14 +73,6 @@ def run_superglue(matching, device):
     run_matching(matching, device, img0_path, img1_path,
                  enable_viz=True, top_k='all', output_dir=output_dir)
 
-async def run_pnp():
-    """
-    這是執行 PnP 計算的假函式，你可以改成真實版本。
-    """
-    print("執行 PnP 計算相機座標...")
-    await asyncio.sleep(1)  # 模擬處理時間
-    print("相機座標計算完成")
-
 async def handle_message(result: str, websocket):
     """
     根據伺服器回傳的 notification 做處理
@@ -83,6 +82,15 @@ async def handle_message(result: str, websocket):
     match result:
         case "has_coordinate":
             print("有座標，等待下一輪")
+            execution_path = Path(__file__).resolve().parent.parent / "execution.json"
+            with open(execution_path, "r", encoding="utf-8") as f:
+                config = json.load(f)
+            config["serial_numbers"] += 1
+            with open(execution_path, "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=4, ensure_ascii=False)
+
+            print(f"已更新 serial_number 為 {config['serial_numbers']}")
+            requesting_coordinate = True
 
         case "no_coordinate":
             print("沒有座標，請求 Cesium 畫面")
@@ -102,26 +110,53 @@ async def handle_message(result: str, websocket):
 
         case "got_match_world_coordinates":
             print("開始進行pnp配對")
-            # === 讀取 serial_number ===
             execution_path = Path(__file__).resolve().parent.parent / "execution.json"
 
             with open(execution_path, "r", encoding="utf-8") as f:
                 config = json.load(f)
             serial_number = str(config["serial_numbers"])
 
-            # C:\D-project\senior-project- (← 回到 python 的上層)
             base_path = Path(__file__).resolve().parent.parent
             match_json_path = base_path / "data_base" / serial_number / "c" / "respiberry_cesium_matches.json"
+            with open(match_json_path, "r", encoding="utf-8") as f:
+                match_data = json.load(f)
 
-
-            # === 呼叫 PnP 函式 ===
+            # 降低所有點的 height 值 20 公尺
+            for pt in match_data.get("points", []):
+                pt["height"] -= 20
+            with open(match_json_path, "w", encoding="utf-8") as f:
+                json.dump(match_data, f, indent=4, ensure_ascii=False)
             lat, lon, height = run_solvepnp_from_json(str(match_json_path))
             print(f"相機 WGS84 位置：緯度 = {lat:.6f}, 經度 = {lon:.6f}, 高度 = {height:.2f} m")
-            print("✅ 匹配流程完成（暫時結束）")
-            raise SystemExit("測試完畢")
-        
 
+            # === 寫入 flight_information.json ===
+            flight_info_path = base_path / "data_base" / serial_number / "a" / "flight_information.json"
 
+            # 嘗試讀取 flight_information.json
+            if flight_info_path.exists():
+                with open(flight_info_path, "r", encoding="utf-8") as f:
+                    flight_data = json.load(f)
+            else:
+                flight_data = {}
+
+            # 更新三維座標與標記為計算產生
+            flight_data["latitude"] = lat
+            flight_data["longitude"] = lon
+            flight_data["height"] = height
+            flight_data["calculated"] = True  # 標記這是由 PnP 算出來的結果
+
+            with open(flight_info_path, "w", encoding="utf-8") as f:
+                json.dump(flight_data, f, indent=4, ensure_ascii=False)
+
+            print(f"📝 已將定位結果寫入 {flight_info_path}")
+
+            # === 更新 serial_number 並寫回 execution.json ===
+            config["serial_numbers"] += 1
+            with open(execution_path, "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=4, ensure_ascii=False)
+
+            print(f"🔁 更新 serial_number 為 {config['serial_numbers']}，準備下一輪")
+            requesting_coordinate = True  # 重新啟動 request 流程
         case None:
             print("未能解析的訊息，略過")
 
@@ -149,4 +184,5 @@ async def main():
         await websocket.close()
 
 if __name__ == '__main__':
+    #reset_serial_number()
     asyncio.run(main())
