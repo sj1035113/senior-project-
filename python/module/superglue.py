@@ -71,6 +71,12 @@ def save_json_and_optional_plot(image0, image1, kpts0, kpts1,
         json.dump(match_data, f, indent=2, ensure_ascii=False)
     print(f"📝 匹配資訊已輸出（JSON）：{json_path}")
 
+    # ➕ 新增一份備份或指定名稱的 JSON 檔案
+    # 例如：原始是 imgA_imgB_matches.json，備份是 imgA_imgB_pixel_pairs.json
+    json_path_alt = json_path.with_name(json_path.stem.replace("_matches", "_pixel_pairs") + ".json")
+    with open(json_path_alt, 'w', encoding='utf-8') as f:
+        json.dump(match_data, f, indent=2, ensure_ascii=False)
+    print(f"📁 匹配資料也儲存至備份檔：{json_path_alt}")
     # 可選：畫圖
     if draw_plot:
         if isinstance(top_k, int) and top_k < len(mconf):

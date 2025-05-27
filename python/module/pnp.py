@@ -43,6 +43,7 @@ def run_solvepnp_from_json(json_path):
         [0, 0, 1]
     ], dtype=np.float32)
 
+
     # 使用 RANSAC + EPNP 進行解算
     success, rvec, tvec, _ = cv2.solvePnPRansac(
         object_points_local, image_points,

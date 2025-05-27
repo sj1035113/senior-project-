@@ -39,8 +39,7 @@ async function sendPixelCoordinateFromFile(jsonPath, ws) {
     const content = fs.readFileSync(jsonPath, 'utf8');
     const matches = JSON.parse(content);
 
-    const topMatches = matches.slice(0, 45);
-    const pixels = topMatches.map(match => ({
+    const pixels = matches.map(match => ({
       x: match.x1,
       y: match.y1
     }));
