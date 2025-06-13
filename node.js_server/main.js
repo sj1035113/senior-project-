@@ -37,7 +37,7 @@ const uploadApp = express();
 uploadApp.use(cors());
 uploadApp.use(express.json({ limit: '50mb' }));
 
-uploadApp.post('/upload', (req, res) => {
+uploadApp.post('/upload', async (req, res) => {
   const { image } = req.body;
   if (!image) {
     return res.status(400).send("No image provided");
@@ -60,6 +60,12 @@ uploadApp.post('/upload', (req, res) => {
   const baseFolder = path.join(__dirname, '..', 'data_base');
   const uploadDir = path.join(baseFolder, String(serialNumber), 'b');
 
+  // Buffer directory one level above this server directory
+  const bufferDir = path.join(__dirname, '..', 'buffer');
+  if (!fs.existsSync(bufferDir)) {
+    fs.mkdirSync(bufferDir, { recursive: true });
+  }
+
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
   }
@@ -68,14 +74,20 @@ uploadApp.post('/upload', (req, res) => {
   const filename = `cesium.png`;
   const filePath = path.join(uploadDir, filename);
 
-  fs.writeFile(filePath, base64Data, 'base64', (err) => {
-    if (err) {
-      console.error("Error saving image:", err);
-      return res.status(500).send("Error saving image");
-    }
-    console.log(`🖼️ Image uploaded and saved as ${filePath}`);
-    res.json({ message: "Image saved", filename });
-  });
+  // Temporary buffer file path using serial number
+  const bufferPath = path.join(bufferDir, `${serialNumber}.png`);
+  fs.writeFileSync(bufferPath, base64Data, 'base64');
+
+  const exists = await waitForFile(bufferPath, 5000);
+  if (!exists) {
+    console.error('Buffered file not found:', bufferPath);
+    return res.status(500).send('Buffer write failed');
+  }
+
+  fs.renameSync(bufferPath, filePath);
+
+  console.log(`🖼️ Image uploaded and saved as ${filePath}`);
+  res.json({ message: 'Image saved', filename });
 });
 
 const uploadServer = http.createServer(uploadApp);
