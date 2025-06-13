@@ -11,11 +11,12 @@ from module.pnp import run_solvepnp_from_json
 
 
 
+# 狀態變數
+# requesting_coordinate 控制 send_request_coordinate 是否持續送出請求
+# awaiting_response 則用於避免重複發送 request_json
 requesting_coordinate = True
+awaiting_response = False
 matching, device = init_model()
-
-# 狀態變數：是否要定時傳送 request_coordinate
-requesting_coordinate = True
 
 def process_message(message: str):
     """
@@ -40,11 +41,12 @@ async def send_request_coordinate(websocket):
     """
     持續每 3 秒傳送一次 request_coordinate
     """
-    global requesting_coordinate
+    global requesting_coordinate, awaiting_response
     while True:
-        if requesting_coordinate:
+        if requesting_coordinate and not awaiting_response:
             request_msg = json.dumps({"action": "request_json"})
             await websocket.send(request_msg)
+            awaiting_response = True
             print(f"送出請求訊息：{request_msg}")
         await asyncio.sleep(3)
 
@@ -78,15 +80,19 @@ async def handle_message(result: str, websocket):
     """
     根據伺服器回傳的 notification 做處理
     """
-    global requesting_coordinate
+    global requesting_coordinate, awaiting_response
 
     match result:
         case "has_coordinate":
             print("有座標，等待下一輪")
+            awaiting_response = False
+            # 暫停自動請求，直到定位流程完成
+            requesting_coordinate = False
 
         case "no_coordinate":
             print("沒有座標，請求 Cesium 畫面")
             requesting_coordinate = False  # 暫停 request
+            awaiting_response = False
             picture_msg = json.dumps({"action": "get_cesium_picture"})
             await websocket.send(picture_msg)
             print(f"送出圖片請求訊息：{picture_msg}")
@@ -98,10 +104,14 @@ async def handle_message(result: str, websocket):
             # SuperGlue 完成後，送出座標請求
             request_msg = json.dumps({"action": "request_coordinate"})
             await websocket.send(request_msg)
+            awaiting_response = True
             print(f"✅ SuperGlue 匹配完成，重新送出請求：{request_msg}")
 
         case "got_match_world_coordinates":
             print("開始進行pnp配對")
+            awaiting_response = False
+            # PnP 計算期間也保持暫停
+            requesting_coordinate = False
             # === 讀取 serial_number ===
             execution_path = Path(__file__).resolve().parent.parent / "execution.json"
 
@@ -116,15 +126,22 @@ async def handle_message(result: str, websocket):
 
             # === 呼叫 PnP 函式 ===
             lat, lon, height = run_solvepnp_from_json(str(match_json_path))
-            print(f"相機 WGS84 位置：緯度 = {lat:.6f}, 經度 = {lon:.6f}, 高度 = {height:.2f} m")
+            print(
+                f"相機 WGS84 位置：緯度 = {lat:.6f}, 經度 = {lon:.6f}, 高度 = {height:.2f} m"
+            )
+
+            # 定位流程完成，允許重新傳送 request_json
+            requesting_coordinate = True
         
 
 
         case None:
             print("未能解析的訊息，略過")
+            awaiting_response = False
 
         case other:
             print(f"收到未知通知: {other}")
+            awaiting_response = False
 
 async def main():
     uri = "ws://localhost:8080"
