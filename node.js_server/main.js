@@ -244,21 +244,36 @@ function handlePythonClient(ws) {
       const data = JSON.parse(message);
       if (data.action === "request_json") {
         try {
+          // 1. 先觸發拍照（原本流程不變）
           await triggerPhoto.triggerPhoto();
-          const jsonPath = path.join(__dirname, "..", "data_base", "test", "test1.json"); 
-          const found = await waitForFile(jsonPath, 10000); // 最多等 5 秒
-          console.log("111讀取到檔案")
-          if (!found) {
-            ws.send(JSON.stringify({ error: "等待 JSON 超時，檔案未上傳" }));
+
+          // 2. 取得目前 serial number
+          const serialNumber = require('./modules/executionManager.js').getSerialNumbers();
+          if (!serialNumber) {
+            ws.send(JSON.stringify({ error: "找不到 execution serial number" }));
             return;
           }
-      
-          const result = await jsonHandler.processJsonFile(jsonPath, ws);
+
+          // 3. 組 buffer 檔案路徑：../buffer/{serialNumber}.json
+          const bufferDir = path.join(__dirname, '..', 'buffer');
+          const bufferPath = path.join(bufferDir, `${serialNumber}.json`);
+
+          // 4. 等待 buffer 檔案出現（最長等 10 秒）
+          const found = await waitForFile(bufferPath, 10000);
+          if (!found) {
+            ws.send(JSON.stringify({ error: "等待 buffer JSON 超時，檔案未寫入" }));
+            return;
+          }
+
+          console.log(`✅ 找到 buffer 檔案：${bufferPath}`);
+
+          // 5. 把 buffer 檔案內容丟給 jsonHandler 處理
+          const result = await jsonHandler.processJsonFile(bufferPath, ws);
           console.log("✅ JSON 處理完成，結果：", result);
-      
+
         } catch (err) {
-          console.error("❌ request_json 處理失敗:", err.message);
-          ws.send(JSON.stringify({ error: "處理 JSON 時發生錯誤", detail: err.message }));
+          console.error("❌ request_json 處理失敗:", err);
+          ws.send(JSON.stringify({ error: "處理 request_json 時發生錯誤", detail: err.message }));
         }
       }
       else if (data.action === "get_cesium_picture"){
