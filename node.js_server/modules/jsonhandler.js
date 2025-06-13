@@ -11,58 +11,77 @@ const execution = require("./executionManager.js");
  */
 async function processJsonFile(jsonFilePath, ws) {
   try {
-    // 1. 讀取 JSON 檔案，檔案內容中包含座標、相機姿態與相片
+    // 1. 讀取 JSON 檔案
     const fileContent = await fs.readFile(jsonFilePath, 'utf8');
     const data = JSON.parse(fileContent);
     console.log('結束讀取 json');
 
-    // 2. 檢查是否包含座標資料
-    if (data.coordinates.latitude !== null && data.coordinates.longitude !== null) {
-      console.log(data.coordinates)
-      // 有座標，向 Python 請求一個資料夾編號
-      const folderNumber = execution.getSerialNumbers();
-      console.log('取得的資料夾編號:', folderNumber);
-      // 3. 設定父資料夾與子資料夾路徑
-      const parentFolder = path.join(__dirname, "..", "..", "data_base", folderNumber.toString());
+    const hasCoordinate =
+      data.coordinates &&
+      data.coordinates.latitude !== null &&
+      data.coordinates.longitude !== null;
 
-      const folderA = path.join(parentFolder, 'a');
-      const folderB = path.join(parentFolder, 'b');
+    // 2. 取得序號並建立資料夾結構
+    const folderNumber = execution.getSerialNumbers();
+    const parentFolder = path.join(
+      __dirname,
+      '..',
+      '..',
+      'data_base',
+      folderNumber.toString()
+    );
+    const folderA = path.join(parentFolder, 'a');
+    const folderB = path.join(parentFolder, 'b');
+    await folderManager.createFolder(parentFolder);
+    await folderManager.createFolder(folderA);
+    await folderManager.createFolder(folderB);
 
-      // 使用 folderManager 建立這些資料夾
-      await folderManager.createFolder(parentFolder);
-      await folderManager.createFolder(folderA);
-      await folderManager.createFolder(folderB);
+    if (hasCoordinate) {
+      console.log('包含座標資料');
 
-      // 4. 將座標和相機姿態存入 a 資料夾
-      const outputData = {
-        coordinates: data.coordinates,
-        cameraPose: data.cameraPose
+      // 3. 解析 drone 姿態資料
+      const orientation =
+        (data.drone_pose && data.drone_pose.orientation) ||
+        (data.cameraPose && data.cameraPose.orientation) ||
+        {};
+
+      const flightInformation = {
+        longitude: data.coordinates.longitude,
+        latitude: data.coordinates.latitude,
+        height: data.coordinates.height,
+        heading:
+          orientation.heading !== undefined
+            ? orientation.heading
+            : orientation.yaw,
+        pitch: orientation.pitch,
+        roll: orientation.roll,
       };
-      const jsonOutputPath = path.join(folderA + 'flight_information.json');
-      await fs.writeFile(jsonOutputPath, JSON.stringify(outputData, null, 2), 'utf8');
-      console.log('已儲存座標與相機姿態至:', jsonOutputPath);
 
-      // 5. 將相片存入 b 資料夾
-      if (data.photo) {
-        const photoBuffer = Buffer.from(data.photo, 'base64');
-        const photoPath = path.join(folderB + '.jpg');
-        await fs.writeFile(photoPath, photoBuffer);
-        console.log('已儲存相片至:', photoPath);
-      } else {
-        console.warn('JSON 中未包含相片資料。');
-      }
-      // 回傳狀態碼：有座標，並傳送訊息時引用 ws 參數
-      await pythonConnector.sendMessage(ws, {
-        notification: 'has_coordinate'
-      });
+      const jsonOutputPath = path.join(folderA, 'flight_information.json');
+      await fs.writeFile(
+        jsonOutputPath,
+        JSON.stringify(flightInformation, null, 2),
+        'utf8'
+      );
+      console.log('已儲存 flight_information 至:', jsonOutputPath);
+
+      await pythonConnector.sendMessage(ws, { notification: 'has_coordinate' });
       return 'Normal';
-    } else if(data.coordinates.latitude === null || data.coordinates.longitude === null) {
-      console.log('JSON 中未包含座標，傳送代碼給 Python 處理。');
-      await pythonConnector.sendMessage(ws, {
-        notification: 'no_coordinate'
-      });
-      return 'NO_COORDINATES';
     }
+
+    // 沒有座標但有照片時，保存照片
+    if (data.photo || data.image) {
+      const base64 = data.photo || data.image;
+      const photoBuffer = Buffer.from(base64, 'base64');
+      const photoPath = path.join(folderB, 'respiberry.jpg');
+      await fs.writeFile(photoPath, photoBuffer);
+      console.log('已儲存相片至:', photoPath);
+    } else {
+      console.warn('JSON 中未包含相片資料');
+    }
+
+    await pythonConnector.sendMessage(ws, { notification: 'no_coordinate' });
+    return 'NO_COORDINATES';
   } catch (error) {
     console.error('處理 JSON 檔案時發生錯誤:', error);
     throw error;
