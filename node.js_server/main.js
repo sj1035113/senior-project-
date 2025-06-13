@@ -114,21 +114,45 @@ jsonApp.post("/trigger_photo", (req, res) => {
   res.json({ status: "Flag set to TRUE" });
 });
 
-jsonApp.post("/upload", (req, res) => {
+jsonApp.post("/upload", async (req, res) => {
   const jsonData = req.body;
 
-  // 🔁 使用相對路徑回到上一層資料夾，再進入 data_base/test/
-  const folder = path.join(__dirname, '..', 'data_base', 'test');
+  // 讀取 execution serial number
+  const executionPath = path.join(__dirname, '..', 'execution.json');
+  let serialNumber = null;
 
-  if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true });
+  try {
+    const executionData = JSON.parse(fs.readFileSync(executionPath, 'utf8'));
+    serialNumber = executionData.serial_numbers;
+    if (!serialNumber) {
+      return res.status(500).send('serial_numbers not found in execution.json');
+    }
+  } catch (err) {
+    console.error('Error reading execution.json:', err);
+    return res.status(500).send('Failed to read execution.json');
+  }
 
-  const filename = 'test1.json'; //${jsonData.timestamp || Date.now()}這邊改為時間戳
-  const filepath = path.join(folder, filename);
+  // 緩衝資料夾
+  const bufferDir = path.join(__dirname, '..', 'buffer');
+  if (!fs.existsSync(bufferDir)) fs.mkdirSync(bufferDir, { recursive: true });
 
-  fs.writeFileSync(filepath, JSON.stringify(jsonData, null, 2));
+  const bufferPath = path.join(bufferDir, `${serialNumber}.json`);
+  fs.writeFileSync(bufferPath, JSON.stringify(jsonData, null, 2));
 
-  console.log(`✅ Received JSON uploaded to: ${filepath}`);
-  res.json({ status: "Upload success", saved_as: filename });
+  const found = await waitForFile(bufferPath, 5000);
+  if (!found) {
+    console.error('Buffered file not found:', bufferPath);
+    return res.status(500).send('Buffer write failed');
+  }
+
+  try {
+    await jsonHandler.processJsonFile(bufferPath, null);
+    console.log(`✅ Received JSON processed from: ${bufferPath}`);
+    res.json({ status: 'Upload success', saved_as: `${serialNumber}.json` });
+  } catch (err) {
+    console.error('Error processing JSON:', err);
+    res.status(500).send('Failed to process JSON');
+  }
 });
 
 jsonApp.listen(JSON_SERVER_PORT, '0.0.0.0', () => {
