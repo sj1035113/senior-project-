@@ -37,7 +37,7 @@ const uploadApp = express();
 uploadApp.use(cors());
 uploadApp.use(express.json({ limit: '50mb' }));
 
-uploadApp.post('/upload', (req, res) => {
+uploadApp.post('/upload', async (req, res) => {
   const { image } = req.body;
   if (!image) {
     return res.status(400).send("No image provided");
@@ -60,6 +60,12 @@ uploadApp.post('/upload', (req, res) => {
   const baseFolder = path.join(__dirname, '..', 'data_base');
   const uploadDir = path.join(baseFolder, String(serialNumber), 'b');
 
+  // Buffer directory one level above this server directory
+  const bufferDir = path.join(__dirname, '..', 'buffer');
+  if (!fs.existsSync(bufferDir)) {
+    fs.mkdirSync(bufferDir, { recursive: true });
+  }
+
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
   }
@@ -68,14 +74,20 @@ uploadApp.post('/upload', (req, res) => {
   const filename = `cesium.png`;
   const filePath = path.join(uploadDir, filename);
 
-  fs.writeFile(filePath, base64Data, 'base64', (err) => {
-    if (err) {
-      console.error("Error saving image:", err);
-      return res.status(500).send("Error saving image");
-    }
-    console.log(`🖼️ Image uploaded and saved as ${filePath}`);
-    res.json({ message: "Image saved", filename });
-  });
+  // Temporary buffer file path using serial number
+  const bufferPath = path.join(bufferDir, `${serialNumber}.png`);
+  fs.writeFileSync(bufferPath, base64Data, 'base64');
+
+  const exists = await waitForFile(bufferPath, 5000);
+  if (!exists) {
+    console.error('Buffered file not found:', bufferPath);
+    return res.status(500).send('Buffer write failed');
+  }
+
+  fs.renameSync(bufferPath, filePath);
+
+  console.log(`🖼️ Image uploaded and saved as ${filePath}`);
+  res.json({ message: 'Image saved', filename });
 });
 
 const uploadServer = http.createServer(uploadApp);
@@ -114,21 +126,45 @@ jsonApp.post("/trigger_photo", (req, res) => {
   res.json({ status: "Flag set to TRUE" });
 });
 
-jsonApp.post("/upload", (req, res) => {
+jsonApp.post("/upload", async (req, res) => {
   const jsonData = req.body;
 
-  // 🔁 使用相對路徑回到上一層資料夾，再進入 data_base/test/
-  const folder = path.join(__dirname, '..', 'data_base', 'test');
+  // 讀取 execution serial number
+  const executionPath = path.join(__dirname, '..', 'execution.json');
+  let serialNumber = null;
 
-  if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true });
+  try {
+    const executionData = JSON.parse(fs.readFileSync(executionPath, 'utf8'));
+    serialNumber = executionData.serial_numbers;
+    if (!serialNumber) {
+      return res.status(500).send('serial_numbers not found in execution.json');
+    }
+  } catch (err) {
+    console.error('Error reading execution.json:', err);
+    return res.status(500).send('Failed to read execution.json');
+  }
 
-  const filename = 'test1.json'; //${jsonData.timestamp || Date.now()}這邊改為時間戳
-  const filepath = path.join(folder, filename);
+  // 緩衝資料夾
+  const bufferDir = path.join(__dirname, '..', 'buffer');
+  if (!fs.existsSync(bufferDir)) fs.mkdirSync(bufferDir, { recursive: true });
 
-  fs.writeFileSync(filepath, JSON.stringify(jsonData, null, 2));
+  const bufferPath = path.join(bufferDir, `${serialNumber}.json`);
+  fs.writeFileSync(bufferPath, JSON.stringify(jsonData, null, 2));
 
-  console.log(`✅ Received JSON uploaded to: ${filepath}`);
-  res.json({ status: "Upload success", saved_as: filename });
+  const found = await waitForFile(bufferPath, 5000);
+  if (!found) {
+    console.error('Buffered file not found:', bufferPath);
+    return res.status(500).send('Buffer write failed');
+  }
+
+  try {
+    await jsonHandler.processJsonFile(bufferPath, null);
+    console.log(`✅ Received JSON processed from: ${bufferPath}`);
+    res.json({ status: 'Upload success', saved_as: `${serialNumber}.json` });
+  } catch (err) {
+    console.error('Error processing JSON:', err);
+    res.status(500).send('Failed to process JSON');
+  }
 });
 
 jsonApp.listen(JSON_SERVER_PORT, '0.0.0.0', () => {
@@ -208,21 +244,36 @@ function handlePythonClient(ws) {
       const data = JSON.parse(message);
       if (data.action === "request_json") {
         try {
+          // 1. 先觸發拍照（原本流程不變）
           await triggerPhoto.triggerPhoto();
-          const jsonPath = path.join(__dirname, "..", "data_base", "test", "test1.json"); 
-          const found = await waitForFile(jsonPath, 10000); // 最多等 5 秒
-          console.log("111讀取到檔案")
-          if (!found) {
-            ws.send(JSON.stringify({ error: "等待 JSON 超時，檔案未上傳" }));
+
+          // 2. 取得目前 serial number
+          const serialNumber = require('./modules/executionManager.js').getSerialNumbers();
+          if (!serialNumber) {
+            ws.send(JSON.stringify({ error: "找不到 execution serial number" }));
             return;
           }
-      
-          const result = await jsonHandler.processJsonFile(jsonPath, ws);
+
+          // 3. 組 buffer 檔案路徑：../buffer/{serialNumber}.json
+          const bufferDir = path.join(__dirname, '..', 'buffer');
+          const bufferPath = path.join(bufferDir, `${serialNumber}.json`);
+
+          // 4. 等待 buffer 檔案出現（最長等 10 秒）
+          const found = await waitForFile(bufferPath, 10000);
+          if (!found) {
+            ws.send(JSON.stringify({ error: "等待 buffer JSON 超時，檔案未寫入" }));
+            return;
+          }
+
+          console.log(`✅ 找到 buffer 檔案：${bufferPath}`);
+
+          // 5. 把 buffer 檔案內容丟給 jsonHandler 處理
+          const result = await jsonHandler.processJsonFile(bufferPath, ws);
           console.log("✅ JSON 處理完成，結果：", result);
-      
+
         } catch (err) {
-          console.error("❌ request_json 處理失敗:", err.message);
-          ws.send(JSON.stringify({ error: "處理 JSON 時發生錯誤", detail: err.message }));
+          console.error("❌ request_json 處理失敗:", err);
+          ws.send(JSON.stringify({ error: "處理 request_json 時發生錯誤", detail: err.message }));
         }
       }
       else if (data.action === "get_cesium_picture"){
