@@ -8,15 +8,15 @@
   },
   "drone_pose": {
     "orientation": {
-      "heading": 56.3125,
-      "pitch": 53.625,
-      "roll": -10.9375
+      "heading": 0.125,
+      "pitch": -4.6875,
+      "roll": 6.3125
     }
   },
   "coordinates": {
-    "latitude": null,
-    "longitude": null,
-    "height": null
+    "latitude": 24.177327716,
+    "longitude": 120.648868045,
+    "height": 170
   },
   "photo": null
 }

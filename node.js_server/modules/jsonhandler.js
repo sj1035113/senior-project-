@@ -5,43 +5,51 @@ const folderManager = require("./folderManager.js");
 const execution = require("./executionManager.js");
 
 /**
- * 處理 JSON 檔案，並根據是否包含座標資料回傳狀態碼
+ * 處理 JSON 檔案，並根據是否包含座標與相片資料回傳狀態碼
  * @param {string} jsonFilePath JSON 檔案路徑
  * @param {object} ws 傳入的 WebSocket 物件
- * @returns {Promise<string>} 回傳 'Normal'、'NO_COORDINATES' 或 'NO_DATA'
+ * @returns {Promise<string>} 'Normal' (有座標), 'NO_COORDINATES' (無座標但有相片), 'NO_DATA' (無座標無相片)
  */
 async function processJsonFile(jsonFilePath, ws) {
   try {
-    // 1. 讀取 JSON 檔案
+    // 1. 讀取 execution.json，取得當前序號
+    const execPath = path.join(__dirname, '..', '..', 'execution.json');
+    const execContent = await fs.readFile(execPath, 'utf8');
+    const execData = JSON.parse(execContent);
+    const serialNumber = execData.serial_numbers;
+    if (serialNumber == null) {
+      throw new Error('execution.json 中缺少 serial_numbers 欄位');
+    }
+
+    // 2. 建立父資料夾與子資料夾 a, b, c
+    const baseFolder = path.join(__dirname, '..', '..', 'data_base', String(serialNumber));
+    const folderA = path.join(baseFolder, 'a');
+    const folderB = path.join(baseFolder, 'b');
+    const folderC = path.join(baseFolder, 'c');
+    await folderManager.createFolder(baseFolder);
+    await folderManager.createFolder(folderA);
+    await folderManager.createFolder(folderB);
+    await folderManager.createFolder(folderC);
+
+    // 3. 讀取並解析 JSON 檔案內容
     const fileContent = await fs.readFile(jsonFilePath, 'utf8');
     const data = JSON.parse(fileContent);
-    console.log('結束讀取 json');
+    console.log('✅ 結束讀取 JSON:', jsonFilePath);
 
     const hasCoordinate =
       data.coordinates &&
-      data.coordinates.latitude !== null &&
-      data.coordinates.longitude !== null;
-
+      data.coordinates.latitude != null &&
+      data.coordinates.longitude != null;
     const hasPhoto = data.photo || data.image;
 
-    // 2. 取得序號並建立資料夾結構
-    const folderNumber = execution.getSerialNumbers();
-    const parentFolder = path.join(__dirname, '..', '..', 'data_base', folderNumber.toString());
-    const folderA = path.join(parentFolder, 'a');
-    const folderB = path.join(parentFolder, 'b');
-    await folderManager.createFolder(parentFolder);
-    await folderManager.createFolder(folderA);
-    await folderManager.createFolder(folderB);
-
-    // 3. 判斷狀態
+    // 4. 根據資料情況做處理
     if (hasCoordinate) {
-      console.log('包含座標資料');
-
+      console.log('📍 包含座標資料，儲存 flight_information.json');
       const orientation =
         (data.drone_pose && data.drone_pose.orientation) ||
         (data.cameraPose && data.cameraPose.orientation) || {};
 
-      const flightInformation = {
+      const flightInfo = {
         longitude: data.coordinates.longitude,
         latitude: data.coordinates.latitude,
         height: data.coordinates.height,
@@ -51,29 +59,28 @@ async function processJsonFile(jsonFilePath, ws) {
       };
 
       const jsonOutputPath = path.join(folderA, 'flight_information.json');
-      await fs.writeFile(jsonOutputPath, JSON.stringify(flightInformation, null, 2), 'utf8');
-      console.log('已儲存 flight_information 至:', jsonOutputPath);
+      await fs.writeFile(jsonOutputPath, JSON.stringify(flightInfo, null, 2), 'utf8');
+      console.log('📝 已儲存 flight_information 至:', jsonOutputPath);
 
       await pythonConnector.sendMessage(ws, { notification: 'has_coordinate' });
       return 'Normal';
     } else if (hasPhoto) {
-      console.log('沒有座標，但有相片');
-
+      console.log('📷 沒有座標，但有相片，儲存圖片');
       const base64 = hasPhoto;
       const photoBuffer = Buffer.from(base64, 'base64');
       const photoPath = path.join(folderB, 'respiberry.jpg');
       await fs.writeFile(photoPath, photoBuffer);
-      console.log('已儲存相片至:', photoPath);
+      console.log('🖼️ 已儲存相片至:', photoPath);
 
       await pythonConnector.sendMessage(ws, { notification: 'no_coordinate' });
       return 'NO_COORDINATES';
     } else {
-      console.warn('JSON 中未包含座標與相片資料');
+      console.warn('⚠️ JSON 中未包含座標與相片資料，回傳 NO_DATA');
       await pythonConnector.sendMessage(ws, { notification: 'no_data' });
       return 'NO_DATA';
     }
   } catch (error) {
-    console.error('處理 JSON 檔案時發生錯誤:', error);
+    console.error('❌ 處理 JSON 檔案時發生錯誤:', error);
     throw error;
   }
 }
