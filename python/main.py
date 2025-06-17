@@ -9,20 +9,23 @@ from module.superglue import init_model, run_matching
 from module.websocket import connect_and_handshake, listen_one
 from module.pnp import run_solvepnp_from_json
 
-
-
-# 狀態變數
-# requesting_coordinate 控制 send_request_coordinate 是否持續送出請求
-# awaiting_response 則用於避免重複發送 request_json
+# === 狀態變數 ===
+# requesting_coordinate 控制 send_request_coordinate 是否持續送出 request_json
+# awaiting_response    控制避免重複發送 request_json
 requesting_coordinate = True
 awaiting_response = False
+
 matching, device = init_model()
 
+# === 重置，初始化 ===
+def reset_serial_number():
+    execution_path = Path(__file__).resolve().parent.parent / "execution.json"
+    with open(execution_path, "w", encoding="utf-8") as f:
+        json.dump({"serial_numbers": 1}, f, indent=4, ensure_ascii=False)
+    print("🔄 已將 serial_number 重置為 1")
+
+# === 訊息解析 ===
 def process_message(message: str):
-    """
-    解析 JSON 格式訊息並回傳代表命令的字串。
-    期望格式：{"notification": "xxx"}
-    """
     try:
         data = json.loads(message)
     except json.JSONDecodeError:
@@ -37,131 +40,144 @@ def process_message(message: str):
         print("訊息中未包含 notification 欄位")
         return None
 
+# === 定時請求 JSON ===
 async def send_request_coordinate(websocket):
-    """
-    持續每 3 秒傳送一次 request_coordinate
-    """
     global requesting_coordinate, awaiting_response
     while True:
+        # print ("發送訊息")
+        # 只有在允許請求且尚未等到回應時，才發送 request_json
         if requesting_coordinate and not awaiting_response:
             request_msg = json.dumps({"action": "request_json"})
             await websocket.send(request_msg)
-            awaiting_response = True
+            awaiting_response = True    # 標記已發送，等回應後才再次發送
             print(f"送出請求訊息：{request_msg}")
         await asyncio.sleep(3)
 
+# === SuperGlue 處理 ===
 def run_superglue(matching, device):
-    # 1. 讀取 execution.json
     execution_path = Path(__file__).resolve().parent.parent / "execution.json"
     with open(execution_path, 'r', encoding='utf-8') as f:
         config = json.load(f)
-    serial_number = str(config['serial_numbers'])  # 確保轉成字串
+    serial_number = str(config['serial_numbers'])
 
-    # 2. 根據 serial_number 決定路徑
     base_path = Path(__file__).resolve().parent.parent / "data_base" / serial_number
     input_dir = base_path / "b"
     output_dir = base_path / "c"
 
-    img0_path = input_dir / "respiberry.jpg"
-    img1_path = input_dir / "cesium.png"
+    img0 = input_dir / "respiberry.jpg"
+    img1 = input_dir / "cesium.png"
 
-    run_matching(matching, device, img0_path, img1_path,
+    run_matching(matching, device, img0, img1,
                  enable_viz=True, top_k='all', output_dir=output_dir)
 
-async def run_pnp():
-    """
-    這是執行 PnP 計算的假函式，你可以改成真實版本。
-    """
-    print("執行 PnP 計算相機座標...")
-    await asyncio.sleep(1)  # 模擬處理時間
-    print("相機座標計算完成")
-
+# === 處理回應 ===
 async def handle_message(result: str, websocket):
-    """
-    根據伺服器回傳的 notification 做處理
-    """
     global requesting_coordinate, awaiting_response
 
     match result:
         case "has_coordinate":
             print("有座標，等待下一輪")
             awaiting_response = False
-            # 暫停自動請求，直到定位流程完成
-            requesting_coordinate = False
+            requesting_coordinate = True
+
+            # === 更新 serial_number 並準備下一輪 ===
+            execution_path = Path(__file__).resolve().parent.parent / "execution.json"
+            with open(execution_path, "r", encoding="utf-8") as f:
+                config = json.load(f)
+            config["serial_numbers"] += 1
+            with open(execution_path, "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=4, ensure_ascii=False)
+            print(f"🔁 序號更新為 {config['serial_numbers']}，開始下一輪")
 
         case "no_coordinate":
+            # 無座標，請求 Cesium 圖片
             print("沒有座標，請求 Cesium 畫面")
-            requesting_coordinate = False  # 暫停 request
+            requesting_coordinate = False
             awaiting_response = False
-            picture_msg = json.dumps({"action": "get_cesium_picture"})
-            await websocket.send(picture_msg)
-            print(f"送出圖片請求訊息：{picture_msg}")
+            msg = json.dumps({"action": "get_cesium_picture"})
+            await websocket.send(msg)
+            print(f"送出圖片請求：{msg}")
 
         case "got_cesium_picture":
+            # 收到 Cesium 圖片，開始特徵匹配
             print("收到 got_cesium_picture，開始匹配")
             run_superglue(matching, device)
-
-            # SuperGlue 完成後，送出座標請求
-            request_msg = json.dumps({"action": "request_coordinate"})
-            await websocket.send(request_msg)
+            # 匹配後請求世界座標
+            msg = json.dumps({"action": "request_coordinate"})
+            await websocket.send(msg)
             awaiting_response = True
-            print(f"✅ SuperGlue 匹配完成，重新送出請求：{request_msg}")
+            print(f"✅ 匹配完成，送出 request_coordinate：{msg}")
 
         case "got_match_world_coordinates":
-            print("開始進行pnp配對")
+            # 收到世界座標，執行 PnP 計算
+            print("開始進行 PnP 配對")
             awaiting_response = False
-            # PnP 計算期間也保持暫停
             requesting_coordinate = False
-            # === 讀取 serial_number ===
-            execution_path = Path(__file__).resolve().parent.parent / "execution.json"
 
+            # 讀取 serial_number
+            execution_path = Path(__file__).resolve().parent.parent / "execution.json"
             with open(execution_path, "r", encoding="utf-8") as f:
                 config = json.load(f)
             serial_number = str(config["serial_numbers"])
 
-            # C:\D-project\senior-project- (← 回到 python 的上層)
-            base_path = Path(__file__).resolve().parent.parent
-            match_json_path = base_path / "data_base" / serial_number / "c" / "respiberry_cesium_matches.json"
+            # 組 match JSON 路徑
+            base = Path(__file__).resolve().parent.parent
+            match_path = base / "data_base" / serial_number / "c" / "respiberry_cesium_matches.json"
 
+            lat, lon, height = run_solvepnp_from_json(str(match_path))
+            print(f"相機 WGS84 位置：緯度={lat:.6f}, 經度={lon:.6f}, 高度={height:.2f}m")
 
-            # === 呼叫 PnP 函式 ===
-            lat, lon, height = run_solvepnp_from_json(str(match_json_path))
-            print(
-                f"相機 WGS84 位置：緯度 = {lat:.6f}, 經度 = {lon:.6f}, 高度 = {height:.2f} m"
-            )
+            # === 寫入 flight_information.json (若資料夾或檔案不存在即初始化) ===
+            info_path = base / "data_base" / serial_number / "a" / "flight_information.json"
+            info_path.parent.mkdir(parents=True, exist_ok=True)
+            if info_path.exists():
+                with open(info_path, "r", encoding="utf-8") as f:
+                    info = json.load(f)
+            else:
+                info = {}
 
-            # 定位流程完成，允許重新傳送 request_json
+            info.update({
+                "latitude": lat,
+                "longitude": lon,
+                "height": height,
+                "calculated": True
+            })
+            with open(info_path, "w", encoding="utf-8") as f:
+                json.dump(info, f, indent=4, ensure_ascii=False)
+            print(f"📝 已寫入定位結果：{info_path}")
+
+            # === 更新 serial_number 並準備下一輪 ===
+            config["serial_numbers"] += 1
+            with open(execution_path, "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=4, ensure_ascii=False)
+            print(f"🔁 序號更新為 {config['serial_numbers']}，開始下一輪")
             requesting_coordinate = True
-        
-
 
         case None:
-            print("未能解析的訊息，略過")
+            print("未能解析訊息，略過")
             awaiting_response = False
 
         case other:
             print(f"收到未知通知: {other}")
             awaiting_response = False
 
+# === 主程式 ===
 async def main():
     uri = "ws://localhost:8080"
     websocket = await connect_and_handshake(uri)
     try:
-        # 啟動定時 request_coordinate 任務
-        coordinate_task = asyncio.create_task(send_request_coordinate(websocket))
-
+        task = asyncio.create_task(send_request_coordinate(websocket))
         while True:
-            # 監聽伺服器回應
-            message = await listen_one(websocket)
-            print(f"收到訊息：{message}")
-            result = process_message(message)
-            await handle_message(result, websocket)
-
+            msg = await listen_one(websocket)
+            print(f"收到訊息：{msg}")
+            res = process_message(msg)
+            await handle_message(res, websocket)
     except KeyboardInterrupt:
-        print("手動停止程式。")
+        print("手動停止")
     finally:
-        coordinate_task.cancel()
+        task.cancel()
         await websocket.close()
 
 if __name__ == '__main__':
+    reset_serial_number()
     asyncio.run(main())
