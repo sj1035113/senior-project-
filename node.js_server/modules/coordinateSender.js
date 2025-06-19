@@ -72,7 +72,7 @@ function sendCoordinates(ws) {
   // 2️⃣ 根據 serial_number 讀取 flight_information.json
   const flightInfoPath = path.join(
     __dirname, '..', '..', 'data_base',
-    String(serialNumber), 'a', 'flight_information.json'
+    String(serialNumber - 1), 'a', 'flight_information.json'
   );
 
   let cameraData;
