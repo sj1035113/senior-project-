@@ -1,0 +1,6 @@
+# 忽略 data_base 資料夾
+data_base/
+
+# 忽略 pyc 編譯檔案
+*.pyc
+__pycache__/
