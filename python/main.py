@@ -14,6 +14,7 @@ from module.pnp import run_solvepnp_from_json
 # awaiting_response    控制避免重複發送 request_json
 requesting_coordinate = True
 awaiting_response = False
+first_capture = True
 
 matching, device = init_model()
 
@@ -72,13 +73,19 @@ def run_superglue(matching, device):
 
 # === 處理回應 ===
 async def handle_message(result: str, websocket):
-    global requesting_coordinate, awaiting_response
+    global requesting_coordinate, awaiting_response, first_capture
 
     match result:
         case "has_coordinate":
             print("有座標，等待下一輪")
             awaiting_response = False
             requesting_coordinate = True
+
+            renew = json.dumps({"action": "renew_cesium"})
+            await websocket.send(renew)
+            if first_capture:
+                await asyncio.sleep(10)
+                first_capture = False
 
             # === 更新 serial_number 並準備下一輪 ===
             execution_path = Path(__file__).resolve().parent.parent / "execution.json"
@@ -97,6 +104,7 @@ async def handle_message(result: str, websocket):
             msg = json.dumps({"action": "get_cesium_picture"})
             await websocket.send(msg)
             print(f"送出圖片請求：{msg}")
+            await asyncio.sleep(1.5)
 
         case "got_cesium_picture":
             # 收到 Cesium 圖片，開始特徵匹配
