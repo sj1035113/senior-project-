@@ -69,6 +69,9 @@
 
     const infoBox = document.getElementById('infoBox');
 
+    let firstCapture = true;
+    let captureWait = 1500;
+
     // ✅ WebSocket
     let ws;
     function connectWebSocket() {
@@ -122,6 +125,27 @@
                   roll: Cesium.Math.toRadians(data.roll || 0)
                 }
               });
+            }
+
+            if (data.action === "renew_cesium") {
+              viewer.camera.setView({
+                destination: Cesium.Cartesian3.fromDegrees(
+                  data.longitude,
+                  data.latitude,
+                  data.height
+                ),
+                orientation: {
+                  heading: Cesium.Math.toRadians(data.heading || 0),
+                  pitch: Cesium.Math.toRadians(data.pitch || -90),
+                  roll: Cesium.Math.toRadians(data.roll || 0)
+                }
+              });
+
+              if (firstCapture) {
+                setTimeout(() => {
+                  firstCapture = false;
+                }, 10000);
+              }
             }
 
             if (data.action === "send_pixel_Coordinates") {
@@ -248,12 +272,13 @@
         .then(data => {
           console.log("上傳成功", data);
 
-          // ✅ 傳送 WebSocket 通知伺服器上傳成功
           if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-              action: "upload_success"
-            }));
-            console.log("✅ 已透過 WebSocket 通知伺服器圖片上傳完成");
+            setTimeout(() => {
+              ws.send(JSON.stringify({
+                action: "upload_success"
+              }));
+              console.log("✅ 已透過 WebSocket 通知伺服器圖片上傳完成");
+            }, 1500);
           } else {
             console.warn("⚠️ WebSocket 尚未連線，無法發送上傳成功通知");
           }
@@ -261,7 +286,7 @@
         .catch(error => {
           console.error("上傳失敗", error);
         });
-      }, 10000);
+      }, captureWait);
     }
 
     // ✅ 顯示預覽圖片
