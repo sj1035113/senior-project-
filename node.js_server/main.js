@@ -161,15 +161,6 @@ jsonApp.post("/upload", async (req, res) => {
     const result = await jsonHandler.processJsonFile(bufferPath, null);
     console.log(`✅ Received JSON processed from: ${bufferPath}`);
 
-    if (result === 'Normal') {
-      // 通知所有 Python 客戶端有座標可用
-      wss.clients.forEach((client) => {
-        if (client.pythonws === true && client.readyState === WebSocket.OPEN) {
-          client.send(JSON.stringify({ notification: 'has_coordinate' }));
-        }
-      });
-    }
-
     res.json({ status: 'Upload success', saved_as: `${serialNumber}.json` });
   } catch (err) {
     console.error('Error processing JSON:', err);
