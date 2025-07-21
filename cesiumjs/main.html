@@ -122,7 +122,7 @@
             if (data.action === "get_cesium_picture") {
               console.log("收到觸發訊息: 執行 get_cesium_picture");
               statusBox.textContent = "狀態：Cesium截圖";
-              infoBox.textContent = "沒有座標";
+              infoBox.textContent = "GPS斷線";
               captureAndUpload();
               return;
             }
@@ -251,6 +251,9 @@
                 calculation_done: "計算完成"
               };
               statusBox.textContent = `狀態：${map[data.step] || data.step}`;
+              if (data.step === "waiting_drone") {
+                infoBox.textContent = "GPS斷線";
+              }
               return;
             }
 
