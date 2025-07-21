@@ -158,8 +158,9 @@ jsonApp.post("/upload", async (req, res) => {
   }
 
   try {
-    await jsonHandler.processJsonFile(bufferPath, null);
+    const result = await jsonHandler.processJsonFile(bufferPath, null);
     console.log(`✅ Received JSON processed from: ${bufferPath}`);
+
     res.json({ status: 'Upload success', saved_as: `${serialNumber}.json` });
   } catch (err) {
     console.error('Error processing JSON:', err);
@@ -223,12 +224,6 @@ wss.on('connection', (ws, req) => {
     }
   });
   ws.on('close', () => {
-    // console.log("❌ Client disconnected");
-  });
-  
-
-  // 監聽客戶端斷線
-  ws.on('close', () => {
     //console.log("❌ Client disconnected");
   });
 });
@@ -271,6 +266,10 @@ function handlePythonClient(ws) {
           const result = await jsonHandler.processJsonFile(bufferPath, ws);
           console.log("✅ JSON 處理完成，結果：", result);
 
+          if (result === 'Normal') {
+            // jsonHandler 已直接通知 Python，此處不額外處理
+          }
+
         } catch (err) {
           console.error("❌ request_json 處理失敗:", err);
           ws.send(JSON.stringify({ error: "處理 request_json 時發生錯誤", detail: err.message }));
@@ -293,6 +292,24 @@ function handlePythonClient(ws) {
           coordinateSender.sendCoordinates(cesiumWs);
         } else {
           console.log("❌ 沒有找到 Cesium 客戶端，請確認 Cesium 是否已連接");
+        }
+
+      }
+      else if (data.action === "renew_cesium") {
+        console.log("🔄 收到 Python 的 renew_cesium 指令");
+
+        let cesiumWs = null;
+        wss.clients.forEach((client) => {
+          if (client.cesiumws === true && client.readyState === WebSocket.OPEN) {
+            cesiumWs = client;
+          }
+        });
+
+        if (cesiumWs) {
+          const serialNumber = require('./modules/executionManager.js').getSerialNumbers();
+          coordinateSender.renewCesium(cesiumWs, serialNumber);
+        } else {
+          console.log("❌ 沒有找到 Cesium 客戶端，無法更新視角");
         }
 
       }
