@@ -27,17 +27,41 @@
       background: rgba(255, 255, 255, 0.1);
       position: absolute;
       top: 10px;
-      left: 10px;
+      right: 10px;
       z-index: 1000;
       border: 1px solid rgba(255, 255, 255, 0);
       font-family: Arial, sans-serif;
       color: white;
+    }
+
+    #statusBox {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      font-family: Arial, sans-serif;
+      z-index: 1000;
+    }
+
+    #resultBox {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      font-family: Arial, sans-serif;
+      z-index: 1000;
     }
   </style>
 </head>
 <body>
   <div id="cesiumContainer"></div>
   <div id="infoBox">等待連線...</div>
+  <div id="statusBox">狀態：等待連線</div>
+  <div id="resultBox">計算結果：-</div>
 
   <script>
     // ✅ 設定 Cesium Ion token
@@ -68,6 +92,8 @@
     viewer.scene.requestRender();
 
     const infoBox = document.getElementById('infoBox');
+    const statusBox = document.getElementById('statusBox');
+    const resultBox = document.getElementById('resultBox');
 
     let firstCapture = true;
     let captureWait = 1500;
@@ -95,12 +121,15 @@
 
             if (data.action === "get_cesium_picture") {
               console.log("收到觸發訊息: 執行 get_cesium_picture");
+              statusBox.textContent = "狀態：Cesium截圖";
+              infoBox.textContent = "沒有座標";
               captureAndUpload();
               return;
             }
 
             if (data.action === "send_Coordinates") {
               console.log("收到相機座標資料，更新攝影機畫面");
+              statusBox.textContent = "狀態：有座標";
               // 更新 InfoBox 顯示資訊
               infoBox.innerHTML = `
                 座標更新:<br>
@@ -215,6 +244,25 @@
               return;
             }
 
+            if (data.action === "status_update") {
+              const map = {
+                waiting_drone: "等待無人機回傳",
+                superglue: "SuperGlue",
+                calculation_done: "計算完成"
+              };
+              statusBox.textContent = `狀態：${map[data.step] || data.step}`;
+              return;
+            }
+
+            if (data.action === "calculation_result") {
+              resultBox.innerHTML = `
+                經度: ${data.longitude.toFixed(6)}<br>
+                緯度: ${data.latitude.toFixed(6)}<br>
+                高度: ${data.height.toFixed(2)}
+              `;
+              return;
+            }
+
           } catch (error) {
             console.error("資料解析錯誤:", error, event.data);
           }
@@ -271,6 +319,7 @@
         .then(response => response.json())
         .then(data => {
           console.log("上傳成功", data);
+          statusBox.textContent = "狀態：等待 SuperGlue";
 
           if (ws && ws.readyState === WebSocket.OPEN) {
             setTimeout(() => {

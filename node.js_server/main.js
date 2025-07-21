@@ -266,7 +266,13 @@ function handlePythonClient(ws) {
           const result = await jsonHandler.processJsonFile(bufferPath, ws);
           console.log("✅ JSON 處理完成，結果：", result);
 
-          if (result === 'Normal') {
+          if (result === 'NO_COORDINATES') {
+            wss.clients.forEach((client) => {
+              if (client.cesiumws === true && client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({ action: 'status_update', step: 'waiting_drone' }));
+              }
+            });
+          } else if (result === 'Normal') {
             // jsonHandler 已直接通知 Python，此處不額外處理
           }
 
@@ -368,6 +374,25 @@ function handlePythonClient(ws) {
         } else {
           console.log("❌ 找不到任何 Cesium 客戶端，請確認是否已連接");
         }
+      }
+      else if (data.action === "status_update") {
+        wss.clients.forEach((client) => {
+          if (client.cesiumws === true && client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({ action: "status_update", step: data.step }));
+          }
+        });
+      }
+      else if (data.action === "calculation_result") {
+        wss.clients.forEach((client) => {
+          if (client.cesiumws === true && client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({
+              action: "calculation_result",
+              latitude: data.latitude,
+              longitude: data.longitude,
+              height: data.height
+            }));
+          }
+        });
       }
       else {
         ws.send(JSON.stringify({ event: "error", message: "未知的指令" }));
