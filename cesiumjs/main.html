@@ -60,7 +60,7 @@
 <body>
   <div id="cesiumContainer"></div>
   <div id="infoBox">等待連線...</div>
-  <div id="statusBox">狀態：等待連線</div>
+  <div id="statusBox">狀態：初始化圖資中</div>
   <div id="resultBox">計算結果：-</div>
 
   <script>
@@ -94,6 +94,18 @@
     const infoBox = document.getElementById('infoBox');
     const statusBox = document.getElementById('statusBox');
     const resultBox = document.getElementById('resultBox');
+
+    function updateInfoBox(data) {
+      infoBox.innerHTML = `
+        座標更新:<br>
+        經度: ${data.longitude.toFixed(5)}<br>
+        緯度: ${data.latitude.toFixed(5)}<br>
+        高度: ${data.height.toFixed(2)}<br>
+        朝向: ${data.heading}°<br>
+        俯仰: ${data.pitch}°<br>
+        翻滾: ${data.roll}°
+      `;
+    }
 
     let firstCapture = true;
     let captureWait = 1500;
@@ -131,15 +143,7 @@
               console.log("收到相機座標資料，更新攝影機畫面");
               statusBox.textContent = "狀態：有座標";
               // 更新 InfoBox 顯示資訊
-              infoBox.innerHTML = `
-                座標更新:<br>
-                經度: ${data.longitude.toFixed(5)}<br>
-                緯度: ${data.latitude.toFixed(5)}<br>
-                高度: ${data.height.toFixed(2)}<br>
-                朝向: ${data.heading}°<br>
-                俯仰: ${data.pitch}°<br>
-                翻滾: ${data.roll}°
-              `;
+              updateInfoBox(data);
 
               // 設定 Cesium 攝影機位置與方向
               viewer.camera.setView({
@@ -156,7 +160,8 @@
               });
             }
 
-            if (data.action === "renew_cesium") {
+           if (data.action === "renew_cesium") {
+              statusBox.textContent = "狀態：有座標";
               viewer.camera.setView({
                 destination: Cesium.Cartesian3.fromDegrees(
                   data.longitude,
@@ -169,6 +174,8 @@
                   roll: Cesium.Math.toRadians(data.roll || 0)
                 }
               });
+
+              updateInfoBox(data);
 
               if (firstCapture) {
                 setTimeout(() => {
@@ -290,10 +297,12 @@
     // ✅ 載入 Google Earth 3D Tiles
     (async () => {
       try {
+        statusBox.textContent = '狀態：初始化圖資中';
         const tileset = await Cesium.createGooglePhotorealistic3DTileset({
           onlyUsingWithGoogleGeocoder: true,
         });
         viewer.scene.primitives.add(tileset);
+        statusBox.textContent = '狀態：等待連線';
       } catch (error) {
         console.error(`❌ Error loading 3D Tiles: ${error}`);
       }
