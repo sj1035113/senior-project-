@@ -241,6 +241,11 @@ function handlePythonClient(ws) {
         try {
           // 1. 先觸發拍照（原本流程不變）
           await triggerPhoto.triggerPhoto();
+          wss.clients.forEach((client) => {
+            if (client.cesiumws === true && client.readyState === WebSocket.OPEN) {
+              client.send(JSON.stringify({ action: "status_update", step: "waiting_drone" }));
+            }
+          });
 
           // 2. 取得目前 serial number
           const serialNumber = require('./modules/executionManager.js').getSerialNumbers();
