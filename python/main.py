@@ -115,6 +115,7 @@ async def handle_message(result: str, websocket):
 
         case "got_cesium_picture":
             print("收到 got_cesium_picture，開始匹配")
+            await websocket.send(json.dumps({"action": "status_update", "step": "superglue"}))
             run_superglue(matching, device)
             msg = json.dumps({"action": "request_coordinate"})
             await websocket.send(msg)
@@ -138,6 +139,13 @@ async def handle_message(result: str, websocket):
 
             lat, lon, height = run_solvepnp_from_json(str(match_path))
             print(f"相機 WGS84 位置：緯度={lat:.6f}, 經度={lon:.6f}, 高度={height:.2f}m")
+            await websocket.send(json.dumps({"action": "status_update", "step": "calculation_done"}))
+            await websocket.send(json.dumps({
+                "action": "calculation_result",
+                "latitude": lat,
+                "longitude": lon,
+                "height": height
+            }))
 
             # === 寫入 flight_information.json ===
             info_path = base / "data_base" / serial_number / "a" / "flight_information.json"
