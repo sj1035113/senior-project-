@@ -8,9 +8,9 @@
   },
   "drone_pose": {
     "orientation": {
-      "heading": 351.125,
+      "heading": 352.125,
       "pitch": -30,
-      "roll": -5.25
+      "roll": -4.5625
     }
   },
   "coordinates": {
