@@ -437,10 +437,31 @@ function handleCesiumClient(ws) {
             __dirname, '..', 'data_base',
             String(serialNumber), 'c', 'respiberry_cesium_matches.json'
           );
-        
-          fs.writeFileSync(savePath, JSON.stringify(data, null, 2), "utf8");
+
+          // 讀取原始匹配點 (含樹梅派與 Cesium 像素)
+          let originalMatches = [];
+          try {
+            const matchContent = fs.readFileSync(savePath, 'utf8');
+            originalMatches = JSON.parse(matchContent);
+          } catch (err) {
+            console.error("⚠️ 無法讀取原始匹配資料:", err);
+          }
+
+          // 將 Cesium 回傳的世界座標與樹梅派像素配對
+          const combinedPoints = (data.points || []).map((pt, idx) => {
+            const match = originalMatches[idx] || {};
+            return {
+              x: match.x2,
+              y: match.y2,
+              longitude: pt.longitude,
+              latitude: pt.latitude,
+              height: pt.height
+            };
+          });
+
+          fs.writeFileSync(savePath, JSON.stringify({ points: combinedPoints }, null, 2), "utf8");
           console.log(`📁 已成功儲存座標至 ${savePath}`);
-        
+
           // 🔁 通知所有 Python 客戶端：got the coordinate
           wss.clients.forEach((client) => {
             if (client.pythonws === true && client.readyState === WebSocket.OPEN) {
