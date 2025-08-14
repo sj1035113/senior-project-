@@ -448,11 +448,12 @@ function handleCesiumClient(ws) {
           }
 
           // 將 Cesium 回傳的世界座標與樹梅派像素配對
-          const combinedPoints = (data.points || []).map((pt, idx) => {
+            const combinedPoints = (data.points || []).map((pt, idx) => {
             const match = originalMatches[idx] || {};
             return {
-              x: match.x2,
-              y: match.y2,
+              // 使用原始匹配點中的樹梅派像素 (x0, y0)
+              x: match.x0,
+              y: match.y0,
               longitude: pt.longitude,
               latitude: pt.latitude,
               height: pt.height
