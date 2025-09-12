@@ -3,6 +3,12 @@ import numpy as np
 import cv2
 from pyproj import Transformer
 
+
+def build_error(message, instruction="請檢查輸入資料"):
+    """建立統一的錯誤回傳格式。"""
+    return {"success": False, "message": message, "instruction": instruction}
+
+
 def run_solvepnp_from_json(json_path):
     """
     從 JSON 檔案中讀取像素與 WGS84 世界座標點，使用 solvePnPRansac 解算相機位置。
@@ -54,7 +60,7 @@ def run_solvepnp_from_json(json_path):
     )
 
     if not success:
-        raise RuntimeError("solvePnPRansac 解算失敗")
+        return build_error("solvePnPRansac 解算失敗", "請檢查輸入特徵點是否足夠或品質是否良好")
 
     R, _ = cv2.Rodrigues(rvec)
     cam_pos_local = (-R.T @ tvec).flatten()
@@ -62,4 +68,9 @@ def run_solvepnp_from_json(json_path):
     lon, lat = utm_to_wgs84.transform(cam_pos_utm[0], cam_pos_utm[1])
     height = cam_pos_utm[2]
 
-    return lat, lon, height
+    return {
+        "success": True,
+        "latitude": lat,
+        "longitude": lon,
+        "height": height,
+    }
