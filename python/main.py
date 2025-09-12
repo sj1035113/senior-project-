@@ -7,7 +7,7 @@ from pathlib import Path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'module'))
 from module.superglue import init_model, run_matching
 from module.websocket import connect_and_handshake, listen_one
-from module.pnp import run_solvepnp_from_json
+from module.pnp import run_solvepnp_from_json, build_error
 
 # === 狀態變數 ===
 # requesting_coordinate 控制 send_request_coordinate 是否持續送出 request_json
@@ -137,7 +137,33 @@ async def handle_message(result: str, websocket):
             base = Path(__file__).resolve().parent.parent
             match_path = base / "data_base" / serial_number / "c" / "respiberry_cesium_matches.json"
 
-            lat, lon, height = run_solvepnp_from_json(str(match_path))
+            try:
+                result = run_solvepnp_from_json(str(match_path))
+                if not result.get("success"):
+                    print(f"PnP 計算失敗：{result['message']}")
+                    await websocket.send(json.dumps({"action": "status_update", "step": "calculation_failed"}))
+                    await websocket.send(json.dumps({
+                        "action": "error",
+                        "message": result["message"],
+                        "instruction": result["instruction"]
+                    }))
+                    requesting_coordinate = True
+                    return
+                lat = result["latitude"]
+                lon = result["longitude"]
+                height = result["height"]
+            except Exception as e:
+                err = build_error(str(e))
+                print(f"PnP 計算過程例外：{e}")
+                await websocket.send(json.dumps({"action": "status_update", "step": "calculation_failed"}))
+                await websocket.send(json.dumps({
+                    "action": "error",
+                    "message": err["message"],
+                    "instruction": err["instruction"]
+                }))
+                requesting_coordinate = True
+                return
+
             print(f"相機 WGS84 位置：緯度={lat:.6f}, 經度={lon:.6f}, 高度={height:.2f}m")
             await websocket.send(json.dumps({"action": "status_update", "step": "calculation_done"}))
             await websocket.send(json.dumps({
