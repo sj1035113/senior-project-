@@ -8,7 +8,7 @@ const execution = require("./executionManager.js");
  * 處理 JSON 檔案，並根據是否包含座標與相片資料回傳狀態碼
  * @param {string} jsonFilePath JSON 檔案路徑
  * @param {object} ws 傳入的 WebSocket 物件
- * @returns {Promise<string>} 'Normal' (有座標), 'NO_COORDINATES' (無座標但有相片), 'NO_DATA' (無座標無相片)
+ * @returns {Promise<object>} A result object, e.g., { status: 'Normal' }, { status: 'NO_COORDINATES', photo: 'base64...' }, or { status: 'NO_DATA' }
  */
 async function processJsonFile(jsonFilePath, ws) {
   try {
@@ -63,21 +63,21 @@ async function processJsonFile(jsonFilePath, ws) {
       console.log('📝 已儲存 flight_information 至:', jsonOutputPath);
 
       await pythonConnector.sendMessage(ws, { notification: 'has_coordinate' });
-      return 'Normal';
+      return { status: 'Normal' };
     } else if (hasPhoto) {
       console.log('📷 沒有座標，但有相片，儲存圖片');
       const base64 = hasPhoto;
-      const photoBuffer = Buffer.from(base64, 'base64');
+      const photoBuffer = Buffer.from(base64.replace(/^data:image\/\w+;base64,/, ''), 'base64');
       const photoPath = path.join(folderB, 'respiberry.jpg');
       await fs.writeFile(photoPath, photoBuffer);
       console.log('🖼️ 已儲存相片至:', photoPath);
 
       await pythonConnector.sendMessage(ws, { notification: 'no_coordinate' });
-      return 'NO_COORDINATES';
+      return { status: 'NO_COORDINATES', photo: hasPhoto };
     } else {
       console.warn('⚠️ JSON 中未包含座標與相片資料，回傳 NO_DATA');
       await pythonConnector.sendMessage(ws, { notification: 'no_data' });
-      return 'NO_DATA';
+      return { status: 'NO_DATA' };
     }
   } catch (error) {
     console.error('❌ 處理 JSON 檔案時發生錯誤:', error);

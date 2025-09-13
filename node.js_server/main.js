@@ -130,24 +130,6 @@ jsonApp.post("/upload", async (req, res) => {
   const jsonData = req.body;
 
   const hasCoordinate = jsonData.coordinates && jsonData.coordinates.latitude != null && jsonData.coordinates.longitude != null;
-
-  // --- Start of injected code ---
-  // 當沒有座標也無照片時，注入一張範例照片以便前端顯示
-  if (!hasCoordinate && !jsonData.photo) {
-    console.log('座標與照片皆遺失，將注入範例照片...');
-    const samplePhotoPath = path.join(__dirname, '..', 'python', 'superglue_lib', 'assets', 'phototourism_sample_images', 'sacre_coeur_000000.jpg');
-    try {
-      const photoBuffer = fs.readFileSync(samplePhotoPath);
-      // 直接使用 raw base64 string
-      jsonData.photo = photoBuffer.toString('base64');
-      console.log('✅ 範例照片已成功注入到 jsonData.photo');
-    } catch (err) {
-      console.error('❌ 讀取範例照片檔失敗:', err);
-      // 即使失敗，也繼續執行，只是不會有照片
-    }
-  }
-  // --- End of injected code ---
-
   if (!hasCoordinate && jsonData.photo) {
     const base64 = jsonData.photo.replace(/^data:image\/\w+;base64,/, "");
     wss.clients.forEach((client) => {
@@ -297,16 +279,31 @@ function handlePythonClient(ws) {
 
           // 5. 把 buffer 檔案內容丟給 jsonHandler 處理
           const result = await jsonHandler.processJsonFile(bufferPath, ws);
-          console.log("✅ JSON 處理完成，結果：", result);
+          console.log("✅ JSON 處理完成，結果狀態：", result.status);
 
-          if (result === 'NO_COORDINATES') {
+          if (result.status === 'NO_COORDINATES') {
+            // 無座標，但可能有照片
+            if (result.photo) {
+              console.log("✅ 無座標，但有照片，傳送照片至前端...");
+              const base64 = String(result.photo).replace(/^data:image\/\w+;base64,/, "");
+              wss.clients.forEach((client) => {
+                if (client.cesiumws === true && client.readyState === WebSocket.OPEN) {
+                  // 傳送照片
+                  client.send(JSON.stringify({ action: "no_gps_photo", photo: base64 }));
+                }
+              });
+            } else {
+                console.log("🟡 無座標，也無照片。");
+            }
+            // 維持原有的狀態更新邏輯
             wss.clients.forEach((client) => {
               if (client.cesiumws === true && client.readyState === WebSocket.OPEN) {
                 client.send(JSON.stringify({ action: 'status_update', step: 'waiting_drone' }));
               }
             });
-          } else if (result === 'Normal') {
-            // jsonHandler 已直接通知 Python，此處不額外處理
+          } else if (result.status === 'Normal') {
+            // 有座標，jsonHandler 已直接通知 Python，此處不額外處理
+            console.log("✅ 有座標，正常流程。");
           }
 
         } catch (err) {
