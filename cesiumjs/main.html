@@ -60,8 +60,8 @@
         #flightPathList li { padding: 6px 8px; font-size: 0.9rem; display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); }
         #flightPathList li:nth-child(even) { background-color: rgba(0,0,0,0.2); }
         .waypoint-id { color: var(--text-secondary); }
-        #screenshotContainer, #resultBox, #infoBox, #statusBox { flex-shrink: 0; }
-        #screenshotPreview { width: 100%; margin-top: 10px; border: 1px solid var(--border-color); border-radius: 3px; }
+        #screenshotContainer, #resultBox, #infoBox, #statusBox, #rpiPhotoContainer { flex-shrink: 0; }
+        #screenshotPreview, #rpiPhotoPreview { width: 100%; margin-top: 10px; border: 1px solid var(--border-color); border-radius: 3px; }
         body.capture-mode .side-panel { visibility: hidden; opacity: 0; }
         .tech-font { font-family: var(--font-family-tech); color: var(--accent-color); letter-spacing: 2px; }
         #flightTimeDisplay { font-size: 2.5rem; text-align: center; }
@@ -75,6 +75,7 @@
             <div id="statusBox" class="panel"><h2>SYSTEM STATUS</h2><div id="statusBoxContent"><span id="statusText" class="data-value">初始化中...</span></div></div>
             <div id="resultBox" class="panel"><h2>CALCULATED TARGET</h2><div id="resultBoxContent"><span class="data-value">-</span></div></div>
             <div id="screenshotContainer" class="panel"><h2>LAST CAPTURE</h2><div id="screenshotContent"><span class="data-value">尚未擷取</span></div></div>
+            <div id="rpiPhotoContainer" class="panel"><h2>DRONE PHOTO</h2><div id="rpiPhotoContent"><span class="data-value">尚未收到照片</span></div></div>
         </div>
         
         <div id="cesiumContainer"></div>
@@ -100,6 +101,7 @@
         const resultBoxContent = document.getElementById('resultBoxContent');
         const flightPathList = document.getElementById('flightPathList');
         const screenshotContent = document.getElementById('screenshotContent');
+        const rpiPhotoContent = document.getElementById('rpiPhotoContent');
         const flightTimeDisplay = document.getElementById('flightTimeDisplay');
 
         const SIDE_PANEL_WIDTH = 420;
@@ -187,6 +189,8 @@
                             }
                             addWaypointToPath(data);
                             isAwaitingCalculation = false; // 解鎖
+                        } else if (data.action === "no_gps_photo") {
+                            displayRpiPhoto(data.photo);
                         }
                     } catch (error) { console.error("資料解析錯誤:", error, event.data); }
                 };
@@ -274,6 +278,8 @@
         }
         
         function displayCapturedImage(dataURL) { screenshotContent.innerHTML = ''; let img = document.getElementById("screenshotPreview"); if (!img) { img = document.createElement("img"); img.id = "screenshotPreview"; screenshotContent.appendChild(img); } img.src = dataURL; }
+
+        function displayRpiPhoto(base64) { rpiPhotoContent.innerHTML = ''; let img = document.getElementById("rpiPhotoPreview"); if (!img) { img = document.createElement("img"); img.id = "rpiPhotoPreview"; rpiPhotoContent.appendChild(img); } img.src = `data:image/jpeg;base64,${base64}`; }
         
         function formatTime(ms) {
             let totalSeconds = Math.floor(ms / 1000);

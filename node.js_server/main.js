@@ -129,6 +129,15 @@ jsonApp.post("/trigger_photo", (req, res) => {
 jsonApp.post("/upload", async (req, res) => {
   const jsonData = req.body;
 
+  const hasCoordinate = jsonData.coordinates && jsonData.coordinates.latitude != null && jsonData.coordinates.longitude != null;
+  if (!hasCoordinate && jsonData.photo) {
+    wss.clients.forEach((client) => {
+      if (client.cesiumws === true && client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify({ action: "no_gps_photo", photo: jsonData.photo }));
+      }
+    });
+  }
+
   // 讀取 execution serial number
   const executionPath = path.join(__dirname, '..', 'execution.json');
   let serialNumber = null;
