@@ -129,6 +129,16 @@ jsonApp.post("/trigger_photo", (req, res) => {
 jsonApp.post("/upload", async (req, res) => {
   const jsonData = req.body;
 
+  const hasCoordinate = jsonData.coordinates && jsonData.coordinates.latitude != null && jsonData.coordinates.longitude != null;
+  if (!hasCoordinate && jsonData.photo) {
+    const base64 = jsonData.photo.replace(/^data:image\/\w+;base64,/, "");
+    wss.clients.forEach((client) => {
+      if (client.cesiumws === true && client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify({ action: "no_gps_photo", photo: base64 }));
+      }
+    });
+  }
+
   // 讀取 execution serial number
   const executionPath = path.join(__dirname, '..', 'execution.json');
   let serialNumber = null;
@@ -394,7 +404,9 @@ function handlePythonClient(ws) {
               action: "calculation_result",
               latitude: data.latitude,
               longitude: data.longitude,
-              height: data.height
+              height: data.height,
+              status: data.status,
+              note: data.note
             }));
           }
         });

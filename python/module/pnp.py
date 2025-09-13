@@ -54,7 +54,7 @@ def run_solvepnp_from_json(json_path):
     )
 
     if not success:
-        raise RuntimeError("solvePnPRansac 解算失敗")
+        return None
 
     R, _ = cv2.Rodrigues(rvec)
     cam_pos_local = (-R.T @ tvec).flatten()
