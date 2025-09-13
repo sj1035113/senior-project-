@@ -137,34 +137,84 @@ async def handle_message(result: str, websocket):
             base = Path(__file__).resolve().parent.parent
             match_path = base / "data_base" / serial_number / "c" / "respiberry_cesium_matches.json"
 
-            lat, lon, height = run_solvepnp_from_json(str(match_path))
-            print(f"相機 WGS84 位置：緯度={lat:.6f}, 經度={lon:.6f}, 高度={height:.2f}m")
-            await websocket.send(json.dumps({"action": "status_update", "step": "calculation_done"}))
-            await websocket.send(json.dumps({
-                "action": "calculation_result",
-                "latitude": lat,
-                "longitude": lon,
-                "height": height
-            }))
+            try:
+                result = run_solvepnp_from_json(str(match_path))
+            except Exception as e:
+                print(f"解算時發生錯誤：{e}")
+                result = None
 
-            # === 寫入 flight_information.json ===
-            info_path = base / "data_base" / serial_number / "a" / "flight_information.json"
-            info_path.parent.mkdir(parents=True, exist_ok=True)
-            if info_path.exists():
-                with open(info_path, "r", encoding="utf-8") as f:
-                    info = json.load(f)
+            if result is None:
+                print("❌ PnP 解算失敗，使用上一筆座標")
+                prev_sn = config["serial_numbers"] - 1
+                prev_info_path = base / "data_base" / str(prev_sn) / "a" / "flight_information.json"
+                lat = lon = height = 0.0
+                if prev_info_path.exists():
+                    with open(prev_info_path, "r", encoding="utf-8") as f:
+                        prev_info = json.load(f)
+                        lat = prev_info.get("latitude", 0.0)
+                        lon = prev_info.get("longitude", 0.0)
+                        height = prev_info.get("height", 0.0)
+
+                await websocket.send(json.dumps({"action": "status_update", "step": "calculation_done"}))
+                await websocket.send(json.dumps({
+                    "action": "calculation_result",
+                    "latitude": lat,
+                    "longitude": lon,
+                    "height": height,
+                    "status": "failed",
+                    "note": "解算失敗"
+                }))
+
+                info_path = base / "data_base" / serial_number / "a" / "flight_information.json"
+                info_path.parent.mkdir(parents=True, exist_ok=True)
+                if info_path.exists():
+                    with open(info_path, "r", encoding="utf-8") as f:
+                        info = json.load(f)
+                else:
+                    info = {}
+
+                info.update({
+                    "latitude": lat,
+                    "longitude": lon,
+                    "height": height,
+                    "calculated": False,
+                    "status": "failed",
+                    "note": "解算失敗"
+                })
+                with open(info_path, "w", encoding="utf-8") as f:
+                    json.dump(info, f, indent=4, ensure_ascii=False)
+                print(f"📝 已寫入失敗定位結果：{info_path}")
+
             else:
-                info = {}
+                lat, lon, height = result
+                print(f"相機 WGS84 位置：緯度={lat:.6f}, 經度={lon:.6f}, 高度={height:.2f}m")
+                await websocket.send(json.dumps({"action": "status_update", "step": "calculation_done"}))
+                await websocket.send(json.dumps({
+                    "action": "calculation_result",
+                    "latitude": lat,
+                    "longitude": lon,
+                    "height": height,
+                    "status": "ok"
+                }))
 
-            info.update({
-                "latitude": lat,
-                "longitude": lon,
-                "height": height,
-                "calculated": True
-            })
-            with open(info_path, "w", encoding="utf-8") as f:
-                json.dump(info, f, indent=4, ensure_ascii=False)
-            print(f"📝 已寫入定位結果：{info_path}")
+                info_path = base / "data_base" / serial_number / "a" / "flight_information.json"
+                info_path.parent.mkdir(parents=True, exist_ok=True)
+                if info_path.exists():
+                    with open(info_path, "r", encoding="utf-8") as f:
+                        info = json.load(f)
+                else:
+                    info = {}
+
+                info.update({
+                    "latitude": lat,
+                    "longitude": lon,
+                    "height": height,
+                    "calculated": True,
+                    "status": "ok"
+                })
+                with open(info_path, "w", encoding="utf-8") as f:
+                    json.dump(info, f, indent=4, ensure_ascii=False)
+                print(f"📝 已寫入定位結果：{info_path}")
 
             # === 更新 serial_number 並準備下一輪 ===
             config["serial_numbers"] += 1

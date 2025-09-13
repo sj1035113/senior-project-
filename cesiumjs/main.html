@@ -182,6 +182,9 @@
                             statusText.textContent = map[data.step] || data.step;
                         } else if (data.action === "calculation_result") {
                             resultBoxContent.innerHTML = `<div class="data-grid"><span class="data-label">經度:</span><span class="data-value">${data.longitude.toFixed(6)}</span><span class="data-label">緯度:</span><span class="data-value">${data.latitude.toFixed(6)}</span><span class="data-label">高度:</span><span class="data-value">${data.height.toFixed(2)} m</span></div>`;
+                            if (data.status === "failed") {
+                                resultBoxContent.innerHTML += `<div class="data-value" style="color:#ff5555;">解算失敗</div>`;
+                            }
                             addWaypointToPath(data);
                             isAwaitingCalculation = false; // 解鎖
                         }
@@ -261,7 +264,8 @@
             const scrollThreshold = 30;
             const isScrolledToBottom = list.scrollHeight - list.clientHeight <= list.scrollTop + scrollThreshold;
             const li = document.createElement('li');
-            li.innerHTML = `<span class="waypoint-id">航點_${String(waypointCounter).padStart(3, '0')}</span><span class="waypoint-coords">${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)} @ ${data.height.toFixed(1)}m</span>`;
+            const note = data.status === 'failed' ? `<span class="waypoint-note" style="color:#ff5555;margin-left:8px;">解算失敗</span>` : '';
+            li.innerHTML = `<span class="waypoint-id">航點_${String(waypointCounter).padStart(3, '0')}</span><span class="waypoint-coords">${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)} @ ${data.height.toFixed(1)}m</span>${note}`;
             list.appendChild(li);
             if (isScrolledToBottom) {
                 list.scrollTop = list.scrollHeight;

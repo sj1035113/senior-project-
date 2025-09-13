@@ -394,7 +394,9 @@ function handlePythonClient(ws) {
               action: "calculation_result",
               latitude: data.latitude,
               longitude: data.longitude,
-              height: data.height
+              height: data.height,
+              status: data.status,
+              note: data.note
             }));
           }
         });
