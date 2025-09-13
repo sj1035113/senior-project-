@@ -75,12 +75,12 @@
             <div id="statusBox" class="panel"><h2>SYSTEM STATUS</h2><div id="statusBoxContent"><span id="statusText" class="data-value">初始化中...</span></div></div>
             <div id="resultBox" class="panel"><h2>CALCULATED TARGET</h2><div id="resultBoxContent"><span class="data-value">-</span></div></div>
             <div id="screenshotContainer" class="panel"><h2>LAST CAPTURE</h2><div id="screenshotContent"><span class="data-value">尚未擷取</span></div></div>
-            <div id="rpiPhotoContainer" class="panel"><h2>DRONE PHOTO</h2><div id="rpiPhotoContent"><span class="data-value">尚未收到照片</span></div></div>
         </div>
         
         <div id="cesiumContainer"></div>
 
         <div id="right-column" class="side-panel">
+            <div id="rpiPhotoContainer" class="panel"><h2>DRONE PHOTO</h2><div id="rpiPhotoContent"><span class="data-value">尚未收到照片</span></div></div>
             <div id="flightPathBox" class="panel">
                 <h2>FLIGHT PATH</h2>
                 <ul id="flightPathList">
@@ -95,6 +95,7 @@
     </div>
 
     <script>
+        // JavaScript 部分完全沒有變動，因此直接複製貼上即可
         const infoBox = document.getElementById('infoBox');
         const infoBoxContent = document.getElementById('infoBoxContent');
         const statusText = document.getElementById('statusText');
@@ -131,7 +132,6 @@
         let ws;
         let startTime = null;
         let flightTimer = null;
-        // ✅ 「計算鎖」旗標
         let isAwaitingCalculation = false;
 
         function connectWebSocket() {
@@ -143,7 +143,7 @@
                         const data = JSON.parse(event.data);
                         
                         if (data.action === "get_cesium_picture") {
-                            isAwaitingCalculation = true; // 上鎖
+                            isAwaitingCalculation = true;
                             statusText.textContent = "GPS遺失，等待計算結果...";
                             infoBoxContent.innerHTML = `<div class="data-value" style="color: var(--warning-color); font-weight: 500;">GPS 訊號遺失</div>`;
                             infoBox.classList.add('panel-warning');
@@ -156,7 +156,6 @@
                                 destination: Cesium.Cartesian3.fromDegrees(data.longitude, data.latitude, data.height),
                                 orientation: { heading: Cesium.Math.toRadians(data.heading || 0), pitch: Cesium.Math.toRadians(data.pitch || -90), roll: Cesium.Math.toRadians(data.roll || 0) }
                             });
-                            // ✅ 只有在鎖是開的 (不在等待計算) 情況下，才新增GPS航點
                             if (!isAwaitingCalculation) {
                                addWaypointToPath(data);
                             }
@@ -188,7 +187,7 @@
                                 resultBoxContent.innerHTML += `<div class="data-value" style="color:#ff5555;">解算失敗</div>`;
                             }
                             addWaypointToPath(data);
-                            isAwaitingCalculation = false; // 解鎖
+                            isAwaitingCalculation = false;
                         } else if (data.action === "no_gps_photo") {
                             displayRpiPhoto(data.photo);
                         }
