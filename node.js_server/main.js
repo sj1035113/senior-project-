@@ -131,9 +131,10 @@ jsonApp.post("/upload", async (req, res) => {
 
   const hasCoordinate = jsonData.coordinates && jsonData.coordinates.latitude != null && jsonData.coordinates.longitude != null;
   if (!hasCoordinate && jsonData.photo) {
+    const base64 = jsonData.photo.replace(/^data:image\/\w+;base64,/, "");
     wss.clients.forEach((client) => {
       if (client.cesiumws === true && client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify({ action: "no_gps_photo", photo: jsonData.photo }));
+        client.send(JSON.stringify({ action: "no_gps_photo", photo: base64 }));
       }
     });
   }
