@@ -130,6 +130,24 @@ jsonApp.post("/upload", async (req, res) => {
   const jsonData = req.body;
 
   const hasCoordinate = jsonData.coordinates && jsonData.coordinates.latitude != null && jsonData.coordinates.longitude != null;
+
+  // --- Start of injected code ---
+  // 當沒有座標也無照片時，注入一張範例照片以便前端顯示
+  if (!hasCoordinate && !jsonData.photo) {
+    console.log('座標與照片皆遺失，將注入範例照片...');
+    const samplePhotoPath = path.join(__dirname, '..', 'python', 'superglue_lib', 'assets', 'phototourism_sample_images', 'sacre_coeur_000000.jpg');
+    try {
+      const photoBuffer = fs.readFileSync(samplePhotoPath);
+      // 直接使用 raw base64 string
+      jsonData.photo = photoBuffer.toString('base64');
+      console.log('✅ 範例照片已成功注入到 jsonData.photo');
+    } catch (err) {
+      console.error('❌ 讀取範例照片檔失敗:', err);
+      // 即使失敗，也繼續執行，只是不會有照片
+    }
+  }
+  // --- End of injected code ---
+
   if (!hasCoordinate && jsonData.photo) {
     const base64 = jsonData.photo.replace(/^data:image\/\w+;base64,/, "");
     wss.clients.forEach((client) => {
