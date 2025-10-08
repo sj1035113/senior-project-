@@ -148,12 +148,16 @@ async def handle_message(result: str, websocket):
                 prev_sn = config["serial_numbers"] - 1
                 prev_info_path = base / "data_base" / str(prev_sn) / "a" / "flight_information.json"
                 lat = lon = height = 0.0
+                heading = pitch = roll = None
                 if prev_info_path.exists():
                     with open(prev_info_path, "r", encoding="utf-8") as f:
                         prev_info = json.load(f)
                         lat = prev_info.get("latitude", 0.0)
                         lon = prev_info.get("longitude", 0.0)
                         height = prev_info.get("height", 0.0)
+                        heading = prev_info.get("heading")
+                        pitch = prev_info.get("pitch")
+                        roll = prev_info.get("roll")
 
                 await websocket.send(json.dumps({"action": "status_update", "step": "calculation_done"}))
                 await websocket.send(json.dumps({
@@ -161,6 +165,9 @@ async def handle_message(result: str, websocket):
                     "latitude": lat,
                     "longitude": lon,
                     "height": height,
+                    "heading": heading,
+                    "pitch": pitch,
+                    "roll": roll,
                     "status": "failed",
                     "note": "解算失敗"
                 }))
@@ -177,6 +184,9 @@ async def handle_message(result: str, websocket):
                     "latitude": lat,
                     "longitude": lon,
                     "height": height,
+                    "heading": heading,
+                    "pitch": pitch,
+                    "roll": roll,
                     "calculated": False,
                     "status": "failed",
                     "note": "解算失敗"

@@ -13,6 +13,10 @@ def run_solvepnp_from_json(json_path):
 
     points = data["points"]
 
+    if len(points) < 40:
+        print(f"⚠️ 匹配點數量不足（{len(points)} < 40），略過 PnP 解算")
+        return None
+
     # 建立投影轉換器
     wgs84_to_utm = Transformer.from_crs("epsg:4326", "epsg:32651", always_xy=True)
     utm_to_wgs84 = Transformer.from_crs("epsg:32651", "epsg:4326", always_xy=True)
