@@ -1,285 +1,287 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8">
-  <title>WebSocket 與 Google Earth 3D Tiles 截圖測試</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://cesium.com/downloads/cesiumjs/releases/1.127/Build/Cesium/Cesium.js"></script>
-  <link href="https://cesium.com/downloads/cesiumjs/releases/1.127/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      background: black;
-    }
-
-    #cesiumContainer {
-      width: 1920px;
-      height: 1080px;
-      margin: 0 auto;
-      display: block;
-      position: relative;
-    }
-
-    #infoBox {
-      padding: 10px;
-      background: rgba(255, 255, 255, 0.1);
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 1000;
-      border: 1px solid rgba(255, 255, 255, 0);
-      font-family: Arial, sans-serif;
-      color: white;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>飛控介面 (v-final-fix) - Cesium</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.127/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.127/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&family=Orbitron:wght@500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --base-bg: #000000;
+            --side-panel-bg: #0a0a0a;
+            --panel-bg: #1f1f1f;
+            --text-primary: #e5e5e5;
+            --text-secondary: #999999;
+            --accent-color: #ffffff;
+            --border-color: #333333;
+            --warning-color: #ff5555;
+            --font-family-base: 'Roboto', sans-serif;
+            --font-family-tech: 'Orbitron', sans-serif;
+        }
+        html, body {
+            margin: 0; padding: 0; overflow: hidden;
+            background: var(--base-bg);
+            font-family: var(--font-family-base);
+            color: var(--text-primary);
+            width: 1920px; height: 1080px;
+        }
+        #main-container { display: flex; width: 100%; height: 100%; }
+        .side-panel { width: 420px; height: 100%; background: var(--side-panel-bg); display: flex; flex-direction: column; }
+        #cesiumContainer { flex: 1; height: 100%; }
+        .panel { background: var(--panel-bg); border: none; border-bottom: 1px solid var(--border-color); padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; }
+        .side-panel > .panel:last-child { border-bottom: none; }
+        .panel h2 {
+            font-size: 1rem; font-weight: 500;
+            color: var(--accent-color);
+            margin: 0 0 15px 0; padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+            text-transform: uppercase; letter-spacing: 1.5px;
+            flex-shrink: 0;
+        }
+        .panel-warning {
+            box-shadow: inset 0 0 0 2px var(--warning-color), 0 0 15px rgba(255, 85, 85, 0.5);
+            animation: pulse-warning 1.5s infinite;
+        }
+        @keyframes pulse-warning {
+            0% { box-shadow: inset 0 0 0 2px var(--warning-color), 0 0 0 0 rgba(255, 85, 85, 0.7); }
+            70% { box-shadow: inset 0 0 0 2px var(--warning-color), 0 0 15px 10px rgba(255, 85, 85, 0); }
+            100% { box-shadow: inset 0 0 0 2px var(--warning-color), 0 0 0 0 rgba(255, 85, 85, 0); }
+        }
+        .data-grid { display: grid; grid-template-columns: 80px 1fr; gap: 10px 10px; font-size: 0.95rem; align-items: center; }
+        .data-label { font-weight: 300; color: var(--text-secondary); text-align: right; }
+        .data-value { font-weight: 400; color: var(--text-primary); }
+        #flightPathBox { flex: 2; min-height: 0; }
+        #flightTimeBox { flex: 1; justify-content: center; }
+        #flightPathList { list-style: none; padding: 0; margin: 0; overflow-y: auto; flex-grow: 1; }
+        #flightPathList li { padding: 6px 8px; font-size: 0.9rem; display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); }
+        #flightPathList li:nth-child(even) { background-color: rgba(0,0,0,0.2); }
+        .waypoint-id { color: var(--text-secondary); }
+        #screenshotContainer, #resultBox, #infoBox, #statusBox { flex-shrink: 0; }
+        #screenshotPreview { width: 100%; margin-top: 10px; border: 1px solid var(--border-color); border-radius: 3px; }
+        body.capture-mode .side-panel { visibility: hidden; opacity: 0; }
+        .tech-font { font-family: var(--font-family-tech); color: var(--accent-color); letter-spacing: 2px; }
+        #flightTimeDisplay { font-size: 2.5rem; text-align: center; }
+        .data-value.tech-font-small { font-family: var(--font-family-tech); font-size: 1rem; color: #4CAF50; }
+    </style>
 </head>
 <body>
-  <div id="cesiumContainer"></div>
-  <div id="infoBox">等待連線...</div>
+    <div id="main-container">
+        <div id="left-column" class="side-panel">
+            <div id="infoBox" class="panel"><h2>TELEMETRY DATA</h2><div id="infoBoxContent"><span class="data-value">等待連線...</span></div></div>
+            <div id="statusBox" class="panel"><h2>SYSTEM STATUS</h2><div id="statusBoxContent"><span id="statusText" class="data-value">初始化中...</span></div></div>
+            <div id="resultBox" class="panel"><h2>CALCULATED TARGET</h2><div id="resultBoxContent"><span class="data-value">-</span></div></div>
+            <div id="screenshotContainer" class="panel"><h2>LAST CAPTURE</h2><div id="screenshotContent"><span class="data-value">尚未擷取</span></div></div>
+        </div>
+        
+        <div id="cesiumContainer"></div>
 
-  <script>
-    // ✅ 設定 Cesium Ion token
-    Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIyOGRlNTU0ZC04ZjI3LTQzZTQtYjkzOC0zZDM2Mjg1M2NhMzUiLCJpZCI6MjY5MTM4LCJpYXQiOjE3NDEyNzUwNjV9.4CesGc_KCiQ7CI0-gIIQZv_5a8ilf6yukgoRkXzo2Ag';
+        <div id="right-column" class="side-panel">
+            <div id="flightPathBox" class="panel">
+                <h2>FLIGHT PATH</h2>
+                <ul id="flightPathList">
+                    <li class="initial-message"><span>等待飛行路徑資料...</span></li>
+                </ul>
+            </div>
+            <div id="flightTimeBox" class="panel">
+                <h2>FLIGHT TIME</h2>
+                <div id="flightTimeDisplay" class="tech-font">--:--:--</div>
+            </div>
+        </div>
+    </div>
 
-    // ✅ 初始化 Viewer（加入 preserveDrawingBuffer）
-    const viewer = new Cesium.Viewer("cesiumContainer", {
-      timeline: false,
-      animation: false,
-      sceneModePicker: false,
-      baseLayerPicker: false,
-      geocoder: Cesium.IonGeocodeProviderType.GOOGLE,
-      globe: false,
-      contextOptions: {
-        preserveDrawingBuffer: true
-      }
-    });
-    viewer.scene.skyAtmosphere.show = true;
+    <script>
+        const infoBox = document.getElementById('infoBox');
+        const infoBoxContent = document.getElementById('infoBoxContent');
+        const statusText = document.getElementById('statusText');
+        const resultBoxContent = document.getElementById('resultBoxContent');
+        const flightPathList = document.getElementById('flightPathList');
+        const screenshotContent = document.getElementById('screenshotContent');
+        const flightTimeDisplay = document.getElementById('flightTimeDisplay');
 
-    // ✅ 強制畫面解析度為 1920x1080（WebGL canvas 尺寸）
-    const width = 1920;
-    const height = 1080;
-    viewer.container.style.width = width + 'px';
-    viewer.container.style.height = height + 'px';
-    viewer.scene.canvas.width = width;
-    viewer.scene.canvas.height = height;
-    viewer.resolutionScale = 1.0;
-    viewer.scene.requestRender();
-
-    const infoBox = document.getElementById('infoBox');
-
-    // ✅ WebSocket
-    let ws;
-    function connectWebSocket() {
-      if (!ws || ws.readyState === WebSocket.CLOSED) {
-        ws = new WebSocket('ws://localhost:8080');
-
-        ws.onopen = () => {
-          console.log("✅ WebSocket 連線成功");
-          ws.send(JSON.stringify({ identify: "cesium" }));
-        };
-
-        ws.onmessage = event => {
-          try {
-            const data = JSON.parse(event.data);
-
-            if (data.status === "connected") {
-              console.log("伺服器確認識別:", data.message);
-              infoBox.innerHTML = `伺服器確認: ${data.message}`;
-              return;
-            }
-
-            if (data.action === "get_cesium_picture") {
-              console.log("收到觸發訊息: 執行 get_cesium_picture");
-              captureAndUpload();
-              return;
-            }
-
-            if (data.action === "send_Coordinates") {
-              console.log("收到相機座標資料，更新攝影機畫面");
-              // 更新 InfoBox 顯示資訊
-              infoBox.innerHTML = `
-                座標更新:<br>
-                經度: ${data.longitude.toFixed(5)}<br>
-                緯度: ${data.latitude.toFixed(5)}<br>
-                高度: ${data.height.toFixed(2)}<br>
-                朝向: ${data.heading}°<br>
-                俯仰: ${data.pitch}°<br>
-                翻滾: ${data.roll}°
-              `;
-
-              // 設定 Cesium 攝影機位置與方向
-              viewer.camera.setView({
-                destination: Cesium.Cartesian3.fromDegrees(
-                  data.longitude,
-                  data.latitude,
-                  data.height
-                ),
-                orientation: {
-                  heading: Cesium.Math.toRadians(data.heading || 0),
-                  pitch: Cesium.Math.toRadians(data.pitch || -90),
-                  roll: Cesium.Math.toRadians(data.roll || 0)
-                }
-              });
-            }
-
-            if (data.action === "send_pixel_Coordinates") {
-              console.log("✅ 收到 pixel 座標要求（send_pixel_Coordinates）訊息");
-              return;
-            }
-
-            if (data.action === "top_match_pixels") {
-              console.log("✅ 收到 top_match_pixels 訊息");
-
-              const scene = viewer.scene;
-              const results = [];
-
-              data.pixels.forEach((pixel, index) => {
-                const x = pixel.x;
-                const y = pixel.y;
-                const screenPosition = new Cesium.Cartesian2(x, y);
-                const worldPosition = scene.pickPosition(screenPosition);
-
-                if (Cesium.defined(worldPosition)) {
-                  const cartographic = Cesium.Cartographic.fromCartesian(worldPosition);
-                  const longitude = Cesium.Math.toDegrees(cartographic.longitude);
-                  const latitude = Cesium.Math.toDegrees(cartographic.latitude);
-                  const height = cartographic.height;
-
-                  results.push({
-                    x,
-                    y,
-                    longitude,
-                    latitude,
-                    height
-                  });
-
-                  // ✅ 可視化標記（可選）
-                  viewer.entities.add({
-                    position: worldPosition,
-                    point: {
-                      pixelSize: 6,
-                      color: Cesium.Color.YELLOW
-                    },
-                    label: {
-                      text: `(${x.toFixed(0)}, ${y.toFixed(0)})`,
-                      font: "10pt sans-serif",
-                      fillColor: Cesium.Color.WHITE,
-                      style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-                      outlineWidth: 1,
-                      verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-                      pixelOffset: new Cesium.Cartesian2(0, -10)
-                    }
-                  });
-
-                } else {
-                  console.warn(`⚠️ 第 ${index + 1} 點 (${x}, ${y}) 無法取得世界座標`);
-                }
-              });
-
-              console.log("📌 轉換完成的 3D 座標：", results);
-
-              // 傳回給伺服器
-              if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                  action: "got_match_world_coordinates",
-                  points: results
-                }));
-              }
-
-              return;
-            }
-
-          } catch (error) {
-            console.error("資料解析錯誤:", error, event.data);
-          }
-        };
-
-        ws.onerror = error => {
-          console.error("❌ WebSocket 錯誤:", error);
-          infoBox.innerHTML = "WebSocket 連線發生錯誤";
-        };
-
-        ws.onclose = () => {
-          console.warn("⚠️ WebSocket 關閉，3 秒後重新連線...");
-          infoBox.innerHTML = "WebSocket 連線已關閉";
-          setTimeout(connectWebSocket, 3000);
-        };
-      }
-    }
-
-    // ✅ 啟動 WebSocket
-    connectWebSocket();
-
-    // ✅ 載入 Google Earth 3D Tiles
-    (async () => {
-      try {
-        const tileset = await Cesium.createGooglePhotorealistic3DTileset({
-          onlyUsingWithGoogleGeocoder: true,
+        const SIDE_PANEL_WIDTH = 420;
+        const FULL_WIDTH = 1920;
+        const FULL_HEIGHT = 1080;
+        const MAP_WIDTH_NORMAL = FULL_WIDTH - (SIDE_PANEL_WIDTH * 2);
+        
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIyOGRlNTU0ZC04ZjI3LTQzZTQtYjkzOC0zZDM2Mjg1M2NhMzUiLCJpZCI6MjY5MTM4LCJpYXQiOjE3NDEyNzUwNjV9.4CesGc_KCiQ7CI0-gIIQZv_5a8ilf6yukgoRkXzo2Ag';
+        const viewer = new Cesium.Viewer("cesiumContainer", {
+            timeline: false, animation: false, sceneModePicker: false, baseLayerPicker: false,
+            geocoder: false, globe: false,
+            contextOptions: { preserveDrawingBuffer: true }
         });
-        viewer.scene.primitives.add(tileset);
-      } catch (error) {
-        console.error(`❌ Error loading 3D Tiles: ${error}`);
-      }
-    })();
+        viewer.scene.skyAtmosphere.show = true;
+        viewer.cesiumWidget.creditContainer.style.display = 'none';
+        viewer.scene.postProcessStages.fxaa.enabled = true;
 
-    // ✅ 擷取畫面並上傳
-    function captureAndUpload() {
-      console.log("開始截圖");
+        function setViewerSize(width, height) {
+            viewer.container.style.width = width + 'px';
+            viewer.container.style.height = height + 'px';
+            viewer.scene.canvas.width = width;
+            viewer.scene.canvas.height = height;
+            viewer.camera.frustum.aspectRatio = width / height;
+        }
+        setViewerSize(MAP_WIDTH_NORMAL, FULL_HEIGHT);
 
-      setTimeout(() => {
-        viewer.scene.render();
-        const canvas = viewer.scene.canvas;
-        const dataURL = canvas.toDataURL("image/png");
-        console.log("截圖完成");
+        let ws;
+        let startTime = null;
+        let flightTimer = null;
+        // ✅ 「計算鎖」旗標
+        let isAwaitingCalculation = false;
 
-        displayCapturedImage(dataURL);
+        function connectWebSocket() {
+            if (!ws || ws.readyState === WebSocket.CLOSED) {
+                ws = new WebSocket('ws://localhost:8080');
+                ws.onopen = () => { isAwaitingCalculation = false; ws.send(JSON.stringify({ identify: "cesium" })); };
+                ws.onmessage = event => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        
+                        if (data.action === "get_cesium_picture") {
+                            isAwaitingCalculation = true; // 上鎖
+                            statusText.textContent = "GPS遺失，等待計算結果...";
+                            infoBoxContent.innerHTML = `<div class="data-value" style="color: var(--warning-color); font-weight: 500;">GPS 訊號遺失</div>`;
+                            infoBox.classList.add('panel-warning');
+                            captureAndUpload();
+                        } else if (data.action === "send_Coordinates" || data.action === "renew_cesium") {
+                            statusText.textContent = "已接收遙測數據";
+                            infoBox.classList.remove('panel-warning');
+                            updateInfoBox(data);
+                            viewer.camera.setView({
+                                destination: Cesium.Cartesian3.fromDegrees(data.longitude, data.latitude, data.height),
+                                orientation: { heading: Cesium.Math.toRadians(data.heading || 0), pitch: Cesium.Math.toRadians(data.pitch || -90), roll: Cesium.Math.toRadians(data.roll || 0) }
+                            });
+                            // ✅ 只有在鎖是開的 (不在等待計算) 情況下，才新增GPS航點
+                            if (!isAwaitingCalculation) {
+                               addWaypointToPath(data);
+                            }
+                        } else if (data.action === "top_match_pixels") {
+                            const scene = viewer.scene;
+                            const results = [];
+                            data.pixels.forEach((pixel) => {
+                                const canvasX = pixel.x - SIDE_PANEL_WIDTH;
+                                const canvasY = pixel.y;
+                                if (canvasX >= 0 && canvasX <= MAP_WIDTH_NORMAL) {
+                                    const screenPosition = new Cesium.Cartesian2(canvasX, canvasY);
+                                    const worldPosition = scene.pickPosition(screenPosition);
+                                    if (Cesium.defined(worldPosition)) {
+                                        const cartographic = Cesium.Cartographic.fromCartesian(worldPosition);
+                                        results.push({ x: pixel.x, y: pixel.y, longitude: Cesium.Math.toDegrees(cartographic.longitude), latitude: Cesium.Math.toDegrees(cartographic.latitude), height: cartographic.height });
+                                    }
+                                }
+                            });
+                            console.log("📌 轉換完成的 3D 座標：", results.length, "個");
+                            if (ws && ws.readyState === WebSocket.OPEN) {
+                                ws.send(JSON.stringify({ action: "got_match_world_coordinates", points: results }));
+                            }
+                        } else if (data.action === "status_update") {
+                            const map = { waiting_drone: "等待無人機回應", superglue: "特徵點匹配中...", calculation_done: "計算完成" };
+                            statusText.textContent = map[data.step] || data.step;
+                        } else if (data.action === "calculation_result") {
+                            resultBoxContent.innerHTML = `<div class="data-grid"><span class="data-label">經度:</span><span class="data-value">${data.longitude.toFixed(6)}</span><span class="data-label">緯度:</span><span class="data-value">${data.latitude.toFixed(6)}</span><span class="data-label">高度:</span><span class="data-value">${data.height.toFixed(2)} m</span></div>`;
+                            addWaypointToPath(data);
+                            isAwaitingCalculation = false; // 解鎖
+                        }
+                    } catch (error) { console.error("資料解析錯誤:", error, event.data); }
+                };
+                ws.onerror = error => { infoBox.classList.remove('panel-warning'); infoBoxContent.innerHTML = `<span class="data-value" style="color: #ff6b6b;">WebSocket 連線錯誤</span>`; };
+                ws.onclose = () => { infoBox.classList.remove('panel-warning'); infoBoxContent.innerHTML = `<span class="data-value" style="color: #ffa500;">WebSocket 連線已中斷</span>`; clearInterval(flightTimer); startTime = null; isAwaitingCalculation = false; flightTimeDisplay.textContent = "--:--:--"; setTimeout(connectWebSocket, 3000); };
+            }
+        }
+        connectWebSocket();
 
-        // 上傳圖片到後端
-        fetch("http://localhost:8081/upload", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ image: dataURL })
-        })
-        .then(response => response.json())
-        .then(data => {
-          console.log("上傳成功", data);
-
-          // ✅ 傳送 WebSocket 通知伺服器上傳成功
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-              action: "upload_success"
-            }));
-            console.log("✅ 已透過 WebSocket 通知伺服器圖片上傳完成");
-          } else {
-            console.warn("⚠️ WebSocket 尚未連線，無法發送上傳成功通知");
-          }
-        })
-        .catch(error => {
-          console.error("上傳失敗", error);
-        });
-      }, 10000);
-    }
-
-    // ✅ 顯示預覽圖片
-    function displayCapturedImage(dataURL) {
-      const img = document.getElementById("screenshotPreview") || document.createElement("img");
-      img.id = "screenshotPreview";
-      img.src = dataURL;
-      img.style.position = "absolute";
-      img.style.top = "10px";
-      img.style.right = "10px";
-      img.style.width = "200px";
-      img.style.border = "2px solid red";
-      img.style.background = "#fff";
-      
-      if (!document.getElementById("screenshotPreview")) {
-        document.body.appendChild(img);
-      }
-    }
-  </script>
+        (async () => {
+            try {
+                statusText.textContent = '載入 3D 圖資中...';
+                const tileset = await Cesium.createGooglePhotorealistic3DTileset({ onlyUsingWithGoogleGeocoder: true });
+                viewer.scene.primitives.add(tileset);
+                statusText.textContent = '準備連線';
+            } catch (error) { statusText.textContent = '3D 圖資載入失敗'; }
+        })();
+        
+        async function captureAndUpload() {
+            document.body.classList.add('capture-mode');
+            setViewerSize(FULL_WIDTH, FULL_HEIGHT);
+            await new Promise(resolve => requestAnimationFrame(resolve));
+            viewer.scene.render(); 
+            const canvas = viewer.scene.canvas;
+            const dataURL = canvas.toDataURL("image/png");
+            console.log(`✅ 地圖截圖完成，尺寸：${canvas.width}x${canvas.height}`);
+            document.body.classList.remove('capture-mode');
+            setViewerSize(MAP_WIDTH_NORMAL, FULL_HEIGHT);
+            await new Promise(resolve => requestAnimationFrame(resolve));
+            viewer.scene.requestRender();
+            displayCapturedImage(dataURL);
+            fetch("http://localhost:8081/upload", {
+                method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image: dataURL })
+            })
+            .then(res => res.json())
+            .then(data => {
+                console.log("上傳成功", data);
+                statusText.textContent = "等待特徵點匹配";
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    setTimeout(() => ws.send(JSON.stringify({ action: "upload_success" })), 1500);
+                }
+            })
+            .catch(error => {
+                console.error("上傳失敗", error);
+                statusText.textContent = "圖片上傳失敗";
+            });
+        }
+        
+        function updateInfoBox(data) {
+            infoBoxContent.innerHTML = `
+                <div class="data-grid">
+                    <span class="data-label">經度:</span><span class="data-value tech-font-small">${data.longitude.toFixed(5)}</span>
+                    <span class="data-label">緯度:</span><span class="data-value tech-font-small">${data.latitude.toFixed(5)}</span>
+                    <span class="data-label">高度:</span><span class="data-value tech-font-small">${data.height.toFixed(2)} m</span>
+                    <span class="data-label">航向:</span><span class="data-value tech-font-small">${(data.heading || 0).toFixed(2)}°</span>
+                    <span class="data-label">俯仰:</span><span class="data-value tech-font-small">${(data.pitch || 0).toFixed(2)}°</span>
+                    <span class="data-label">翻滾:</span><span class="data-value tech-font-small">${(data.roll || 0).toFixed(2)}°</span>
+                </div>`;
+        }
+        
+        let waypointCounter = 1;
+        function addWaypointToPath(data) {
+            if (waypointCounter === 1 && flightPathList.querySelector('.initial-message')) {
+                flightPathList.innerHTML = '';
+            }
+            if (!startTime) {
+                startTime = Date.now();
+                if(flightTimer) clearInterval(flightTimer);
+                flightTimer = setInterval(() => {
+                    const elapsedTime = Date.now() - startTime;
+                    flightTimeDisplay.textContent = formatTime(elapsedTime);
+                }, 1000);
+            }
+            const list = flightPathList;
+            const scrollThreshold = 30;
+            const isScrolledToBottom = list.scrollHeight - list.clientHeight <= list.scrollTop + scrollThreshold;
+            const li = document.createElement('li');
+            li.innerHTML = `<span class="waypoint-id">航點_${String(waypointCounter).padStart(3, '0')}</span><span class="waypoint-coords">${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)} @ ${data.height.toFixed(1)}m</span>`;
+            list.appendChild(li);
+            if (isScrolledToBottom) {
+                list.scrollTop = list.scrollHeight;
+            }
+            waypointCounter++;
+        }
+        
+        function displayCapturedImage(dataURL) { screenshotContent.innerHTML = ''; let img = document.getElementById("screenshotPreview"); if (!img) { img = document.createElement("img"); img.id = "screenshotPreview"; screenshotContent.appendChild(img); } img.src = dataURL; }
+        
+        function formatTime(ms) {
+            let totalSeconds = Math.floor(ms / 1000);
+            let hours = Math.floor(totalSeconds / 3600);
+            totalSeconds %= 3600;
+            let minutes = Math.floor(totalSeconds / 60);
+            let seconds = totalSeconds % 60;
+            minutes = String(minutes).padStart(2, '0');
+            hours = String(hours).padStart(2, '0');
+            seconds = String(seconds).padStart(2, '0');
+            return `${hours}:${minutes}:${seconds}`;
+        }
+    </script>
 </body>
 </html>

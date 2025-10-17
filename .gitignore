@@ -1,0 +1,8 @@
+# 忽略整個 data_base 資料夾
+data_base/
+
+# 忽略所有 .pyc 檔案
+*.pyc
+
+# 忽略所有 __pycache__ 資料夾
+__pycache__/

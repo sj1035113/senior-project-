@@ -1,0 +1,22 @@
+{
+  "camera_pose": {
+    "position": {
+      "x": 1,
+      "y": 2,
+      "z": 3
+    }
+  },
+  "drone_pose": {
+    "orientation": {
+      "heading": 352.1875,
+      "pitch": -30,
+      "roll": -0.8125
+    }
+  },
+  "coordinates": {
+    "latitude": 24.177304227,
+    "longitude": 120.648794737,
+    "height": 173.4887
+  },
+  "photo": null
+}
