@@ -39,8 +39,7 @@ async function sendPixelCoordinateFromFile(jsonPath, ws) {
     const content = fs.readFileSync(jsonPath, 'utf8');
     const matches = JSON.parse(content);
 
-    const topMatches = matches.slice(0, 45);
-    const pixels = topMatches.map(match => ({
+    const pixels = matches.map(match => ({
       x: match.x1,
       y: match.y1
     }));
@@ -73,7 +72,7 @@ function sendCoordinates(ws) {
   // 2️⃣ 根據 serial_number 讀取 flight_information.json
   const flightInfoPath = path.join(
     __dirname, '..', '..', 'data_base',
-    String(serialNumber), 'a', 'flight_information.json'
+    String(serialNumber - 1), 'a', 'flight_information.json'
   );
 
   let cameraData;
@@ -95,8 +94,44 @@ function sendCoordinates(ws) {
   console.log("📸 已要求 Cesium 擷取畫面");
 }
 
+/**
+ * 讀取指定 serialNumber 的 flight_information.json 並要求 Cesium 更新視角
+ * @param {WebSocket} ws - Cesium WebSocket 連線物件
+ * @param {number|string} serialNumber - 資料夾序號
+ * @returns {boolean}
+ */
+function renewCesium(ws, serialNumber) {
+  const filePath = path.join(
+    __dirname,
+    '..',
+    '..',
+    'data_base',
+    String(serialNumber),
+    'a',
+    'flight_information.json'
+  );
+
+  try {
+    const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    data.action = 'renew_cesium';
+
+    if (ws && ws.readyState === ws.OPEN) {
+      ws.send(JSON.stringify(data));
+      console.log('🔄 已傳送 renew_cesium 給 Cesium');
+      return true;
+    } else {
+      console.warn('❌ WebSocket 尚未連線，無法傳送 renew_cesium');
+      return false;
+    }
+  } catch (err) {
+    console.error('❌ 讀取 flight_information.json 失敗:', err);
+    return false;
+  }
+}
+
 module.exports = {
   sendPixelCoordinate,
   sendPixelCoordinateFromFile,
-  sendCoordinates
+  sendCoordinates,
+  renewCesium
 };
